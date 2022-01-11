@@ -1,0 +1,31 @@
+syntax = "proto3";
+package agent;
+
+service Job {
+    rpc create (JobInfo) returns (JobRequestResult);
+    rpc destroy (JobGUID) returns (JobRequestResult);
+    rpc list (JobGUID) returns (JobsList);
+}
+
+message JobInfo {
+    string guid = 1;
+    string name = 2;
+    string description = 3;
+    uint32 cores = 4;
+    uint32 memory = 5;
+    string image = 6;
+    string corpus = 7;
+    uint32 timeout = 8;
+}
+
+message JobRequestResult {
+    string message = 1;
+}
+
+message JobGUID {
+    string guid = 1;
+}
+
+message JobsList {
+    repeated JobGUID guids = 1;
+}

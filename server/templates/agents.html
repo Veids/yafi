@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock title %}
+{% block header %}{% endblock header %}
+{% block content %}
+{% set current_page = "Agents" %}
+{% include "navbar.html" %}
+{% include "sidebar.html" %}
+<div class="content-wrapper">
+  {% include "page_header.html" %}
+  <!-- Main content -->
+  <section class="content">
+    <div class="container-fluid">
+      <div class="row" id="content-panel">
+        <div class="overlay">
+          <i class="fas fa-3x fa-sync-alt fa-spin"></i>
+        </div>
+      </div>
+    </div>
+    {% include "modals.html" %}
+  </section>
+  <!-- /.content -->
+</div>
+{% endblock content %}

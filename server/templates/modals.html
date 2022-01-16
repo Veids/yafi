@@ -1,0 +1,38 @@
+<div class="modal fade" id="modal-add-agent">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Add Agent</h4>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="form-group">
+            <label for="description">Description</label>
+            <input type="text" class="form-control" id="description" placeholder="Enter description">
+          </div>
+          <div class="form-group">
+            <label for="agent-type">Agent type</label>
+            <select class="custom-select form-control-border" id="agent-type">
+              <option>linux</option>
+              <option>windows</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="endpoint">Endpoint</label>
+            <input type="text" class="form-control" id="endpoint" placeholder="Enter endpoint">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary">Confirm</button>
+      </div>
+    </div>
+    <!-- /.modal-content -->
+  </div>
+  <!-- /.modal-dialog -->
+</div>
+<!-- /.modal -->

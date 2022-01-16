@@ -1,0 +1,43 @@
+<!-- Main Sidebar Container -->
+<aside class="main-sidebar sidebar-dark-primary elevation-4">
+  <!-- Brand Logo -->
+  <a href="/" class="brand-link">
+    <img src="/static/images/logo.jpg" alt="Dashboard Logo" class="brand-image img-circle elevation-3" style="opacity: .8">
+    <span class="brand-text font-weight-light">Spray & Pray</span>
+  </a>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <!-- Sidebar Menu -->
+    <nav class="mt-2">
+      <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+        <li class="nav-item">
+          <a href="/" class="nav-link{% if current_page == 'Dashboard' %} active{% endif %}">
+            <i class="nav-icon fas fa-tachometer-alt"></i>
+            <p>
+              Dashboard
+            </p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/agents" class="nav-link{% if current_page == 'Agents' %} active{% endif %}">
+            <i class="nav-icon fas fa-cubes"></i>
+            <p>
+              Agents
+            </p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link{% if current_page == 'Jobs' %} active{% endif %}">
+            <i class="nav-icon fas fa-briefcase"></i>
+            <p>
+              Jobs
+            </p>
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <!-- /.sidebar-menu -->
+  </div>
+  <!-- /.sidebar -->
+</aside>

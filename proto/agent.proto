@@ -27,5 +27,5 @@ message JobGUID {
 }
 
 message JobsList {
-    repeated JobGUID guids = 1;
+    repeated string guids = 1;
 }

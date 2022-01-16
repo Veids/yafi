@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock title %}
+{% block header %}{% endblock header %}
+{% block content %}
+{% set current_page = "Dashboard" %}
+{% include "navbar.html" %}
+{% include "sidebar.html" %}
+<div class="content-wrapper">
+  {% include "page_header.html" %}
+  <!-- Main content -->
+  <section class="content">
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-lg-3 col-6">
+          <!-- small card -->
+          <div class="small-box bg-info" id="agents_total">
+            <div class="overlay">
+              <i class="fas fa-3x fa-sync-alt fa-spin"></i>
+            </div>
+            <div class="inner">
+              <h3>150</h3>
+
+              <p>Total Agents</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-cubes"></i>
+            </div>
+            <a href="/agents" class="small-box-footer">
+              More info <i class="fas fa-arrow-circle-right"></i>
+            </a>
+          </div>
+          <!-- ./small card -->
+        </div>
+        <div class="col-lg-3 col-6">
+          <!-- small card -->
+          <div class="small-box bg-success" id="agents_alive">
+            <div class="overlay">
+              <i class="fas fa-3x fa-sync-alt fa-spin"></i>
+            </div>
+            <div class="inner">
+              <h3>150</h3>
+
+              <p>Agents Alive</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-plug"></i>
+            </div>
+            <a href="/agents" class="small-box-footer">
+              More info <i class="fas fa-arrow-circle-right"></i>
+            </a>
+          </div>
+          <!-- ./small card -->
+        </div>
+      </div>
+    </div>
+    {% include "modals.html" %}
+  </section>
+  <!-- /.content -->
+</div>
+{% endblock content %}

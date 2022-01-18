@@ -1,3 +1,5 @@
+function formatBytes(a,b=2,k=1024){with(Math){let d=floor(log(a)/log(k));return 0==a?"0 Bytes":parseFloat((a/pow(k,d)).toFixed(max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}}
+
 function sanitize(text){
   return $("<div>").text(text).html();
 }
@@ -43,11 +45,11 @@ function build_agent_box(agent){
                   </li>
                   <li class="nav-item p-2">
                     <i class="fas fa-microchip p-2 align-middle"></i> CPUs
-                    <span class="agent-badge bg-primary float-right">5</span>
+                    <span class="agent-badge bg-primary float-right">${agent.cpus}</span>
                   </li>
                   <li class="nav-item px-2 pt-2 pb-1">
                     <i class="fas fa-memory p-2 align-middle"></i> RAM
-                    <span class="agent-badge bg-primary float-right">5</span>
+                    <span class="agent-badge bg-primary float-right">${formatBytes(agent.ram * 1000)}</span>
                   </li>
                 </ul>
               </div>

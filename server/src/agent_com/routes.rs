@@ -1,9 +1,11 @@
-use actix_web::{delete, get, post, put, web, HttpResponse, Responder};
+use std::sync::Arc;
+
+use actix_web::{delete, get, post, web, HttpResponse, Responder};
 use sqlx::SqlitePool;
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
-use crate::agent_com::{Agent, AgentRequest, AgentCreateRequest};
+use crate::agent_com::{Agent, AgentCreateRequest};
 use crate::agent_processor::AgentUpdate;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
@@ -12,7 +14,7 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .service(get_all)
             .service(get_by_guid)
             .service(create)
-            .service(delete)
+            .service(delete),
     );
 }
 
@@ -40,6 +42,15 @@ async fn get_by_guid(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) ->
     }
 }
 
+async fn notify_processor<T: std::fmt::Debug>(tx: Arc<Sender<T>>, agent_update: T) {
+    match tx.send(agent_update).await {
+        Ok(_) => (),
+        Err(err) => {
+            println!("Error notifying processor: {:?}", err);
+        }
+    }
+}
+
 #[post("/agent")]
 async fn create(
     agent_req: web::Json<AgentCreateRequest>,
@@ -56,8 +67,10 @@ async fn create(
                 agent_type: agent_req.agent_type,
                 endpoint: agent_req.endpoint,
                 status: "init".to_string(),
+                cpus: None,
+                ram: None,
             };
-        },
+        }
         _ => {
             return HttpResponse::BadRequest().body("Unsupported agent type");
         }
@@ -65,13 +78,16 @@ async fn create(
 
     match Agent::create(agent, db_pool.get_ref()).await {
         Ok(agent) => {
-            tx.send(AgentUpdate {
-                guid: agent.guid.clone(),
-                update_type: "add".to_string(),
-            })
+            notify_processor(
+                tx.into_inner(),
+                AgentUpdate {
+                    guid: agent.guid.clone(),
+                    update_type: "add".to_string(),
+                },
+            )
             .await;
             HttpResponse::Ok().json(agent)
-        },
+        }
         Err(err) => {
             println!("error creating agent: {}", err);
             HttpResponse::InternalServerError().body("Error trying to create new agent")
@@ -80,15 +96,23 @@ async fn create(
 }
 
 #[delete("/agent/{id}")]
-async fn delete(guid: web::Path<String>, db_pool: web::Data<SqlitePool>, tx: web::Data<Sender<AgentUpdate>>) -> impl Responder {
+async fn delete(
+    guid: web::Path<String>,
+    db_pool: web::Data<SqlitePool>,
+    tx: web::Data<Sender<AgentUpdate>>,
+) -> impl Responder {
     match Agent::delete(guid.into_inner(), db_pool.get_ref()).await {
         Ok(guid) => {
-            tx.send(AgentUpdate{
-                guid: guid.clone(),
-                update_type: "del".to_string()
-            }).await;
+            notify_processor(
+                tx.into_inner(),
+                AgentUpdate {
+                    guid: guid.clone(),
+                    update_type: "del".to_string(),
+                },
+            )
+            .await;
             HttpResponse::Ok().body(format!("Succesfully deleted {} agent", guid))
-        },
+        }
         Err(err) => {
             println!("error deleting agent: {}", err);
             HttpResponse::InternalServerError().body("Todo not found")

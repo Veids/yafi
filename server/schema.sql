@@ -3,5 +3,7 @@ CREATE TABLE IF NOT EXISTS agents (
     description TEXT NOT NULL,
     agent_type        TEXT NOT NULL,
     endpoint    TEXT NOT NULL,
-    status      TEXT NOT NULL
+    status      TEXT NOT NULL,
+    cpus        INTEGER,
+    ram         INTEGER
 );

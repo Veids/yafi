@@ -1,6 +1,8 @@
 syntax = "proto3";
 package agent;
 
+message Empty {}
+
 service Job {
     rpc create (JobInfo) returns (JobRequestResult);
     rpc destroy (JobGUID) returns (JobRequestResult);
@@ -28,4 +30,13 @@ message JobGUID {
 
 message JobsList {
     repeated string guids = 1;
+}
+
+service SystemInfo {
+    rpc get(Empty) returns (SysInfo);
+}
+
+message SysInfo {
+    uint64 cpus = 1;
+    uint64 ram = 2;
 }

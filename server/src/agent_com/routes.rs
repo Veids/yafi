@@ -6,7 +6,7 @@ use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
 use crate::agent_com::{Agent, AgentCreateRequest};
-use crate::agent_processor::AgentUpdate;
+use crate::broker::Event;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -55,7 +55,7 @@ async fn notify_processor<T: std::fmt::Debug>(tx: Arc<Sender<T>>, agent_update: 
 async fn create(
     agent_req: web::Json<AgentCreateRequest>,
     db_pool: web::Data<SqlitePool>,
-    tx: web::Data<Sender<AgentUpdate>>,
+    tx: web::Data<Sender<Event>>,
 ) -> impl Responder {
     let agent_req = agent_req.into_inner();
     let agent;
@@ -80,9 +80,8 @@ async fn create(
         Ok(agent) => {
             notify_processor(
                 tx.into_inner(),
-                AgentUpdate {
+                Event::NewAgent {
                     guid: agent.guid.clone(),
-                    update_type: "add".to_string(),
                 },
             )
             .await;
@@ -99,18 +98,11 @@ async fn create(
 async fn delete(
     guid: web::Path<String>,
     db_pool: web::Data<SqlitePool>,
-    tx: web::Data<Sender<AgentUpdate>>,
+    tx: web::Data<Sender<Event>>,
 ) -> impl Responder {
     match Agent::delete(guid.into_inner(), db_pool.get_ref()).await {
         Ok(guid) => {
-            notify_processor(
-                tx.into_inner(),
-                AgentUpdate {
-                    guid: guid.clone(),
-                    update_type: "del".to_string(),
-                },
-            )
-            .await;
+            notify_processor(tx.into_inner(), Event::DelAgent { guid: guid.clone() }).await;
             HttpResponse::Ok().body(format!("Succesfully deleted {} agent", guid))
         }
         Err(err) => {

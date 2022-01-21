@@ -159,7 +159,7 @@ function main(){
         $("#agents_total h3").text(agents.length);
         $("#agents_total .overlay").remove();
 
-        var alive_agents = agents.filter(agent => agent.status == "alive");
+        var alive_agents = agents.filter(agent => agent.status == "up");
         $("#agents_alive h3").text(alive_agents.length);
         $("#agents_alive .overlay").remove();
       }

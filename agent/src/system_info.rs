@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use sysinfo::{RefreshKind, System, SystemExt};
 use tonic::{Request, Response, Status};
 
-use agent::system_info_server::SystemInfo;
-use agent::{Empty, SysInfo};
+use crate::protos::agent::{Empty, SysInfo};
+use crate::protos::agent::system_info_server::SystemInfo;
 
 pub mod agent {
     tonic::include_proto!("agent");

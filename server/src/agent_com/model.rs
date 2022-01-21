@@ -4,7 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
-use crate::agent_processor::agent::SysInfo;
+use crate::protos::agent::SysInfo;
 
 #[derive(Serialize, Deserialize)]
 pub struct AgentRequest {
@@ -151,6 +151,27 @@ impl Agent {
             guid,
             cpus,
             ram
+        )
+        .execute(&mut tx)
+        .await?
+        .rows_affected();
+
+        tx.commit().await.unwrap();
+
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_status(guid: &String, status: &str, pool: &SqlitePool) -> Result<bool> {
+        let mut tx = pool.begin().await?;
+
+        let rows_affected = sqlx::query!(
+            r#"
+            UPDATE agents
+            SET status = $2
+            WHERE guid = $1
+            "#,
+            guid,
+            status
         )
         .execute(&mut tx)
         .await?

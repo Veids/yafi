@@ -1,21 +1,19 @@
 use std::env;
 
+use crate::agent_com::Agent;
 use actix_files::Files;
 use actix_web::{get, web, App, HttpResponse, HttpServer};
 use dotenv::dotenv;
 use lazy_static::lazy_static;
 use sqlx::SqlitePool;
 use tera::Tera;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, Sender};
 
-pub mod agent {
-    tonic::include_proto!("agent");
-}
-
+mod protos;
 mod agent_com;
-mod agent_processor;
+mod broker;
 
-use agent_processor::AgentProcessor;
+use broker::{broker, Event};
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
@@ -47,6 +45,22 @@ async fn agents() -> HttpResponse {
     }
 }
 
+async fn add_existing_agents(tx: &Sender<Event>, db_pool: &SqlitePool) {
+    match Agent::get_all(&db_pool).await {
+        Ok(agents_vec) => {
+            for agent in agents_vec {
+                tx.send(Event::NewAgent { guid: agent.guid }).await.unwrap();
+            }
+        }
+        Err(err) => {
+            println!(
+                "[AgentProcessor.add_existing] error fetching agents: {}",
+                err
+            );
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -54,10 +68,10 @@ async fn main() -> std::io::Result<()> {
     let database_url = env::var("DATABASE_URL").expect("Set DATABASE_URL in .env file");
     let db_pool = SqlitePool::connect(&database_url).await.unwrap();
 
-    let (tx, rx) = mpsc::channel(100);
-    let mut agent_processor = AgentProcessor::new(rx, db_pool.clone());
-
-    tokio::spawn(async move { agent_processor.main().await });
+    let (tx, rx) = mpsc::channel::<Event>(100);
+    let db = db_pool.clone();
+    tokio::spawn(async move { broker(db, rx).await });
+    add_existing_agents(&tx, &db_pool).await;
 
     HttpServer::new(move || {
         App::new()

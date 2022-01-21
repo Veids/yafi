@@ -6,7 +6,16 @@ message Empty {}
 service Job {
     rpc create (JobInfo) returns (JobRequestResult);
     rpc destroy (JobGUID) returns (JobRequestResult);
-    rpc list (JobGUID) returns (JobsList);
+    rpc list (Empty) returns (JobsList);
+    rpc get_all (Empty) returns (JobInfoContainerList);
+}
+
+service SystemInfo {
+    rpc get(Empty) returns (SysInfo);
+}
+
+service Updates {
+    rpc Get(Empty) returns (stream Update) {}
 }
 
 message JobInfo {
@@ -32,11 +41,31 @@ message JobsList {
     repeated string guids = 1;
 }
 
-service SystemInfo {
-    rpc get(Empty) returns (SysInfo);
-}
-
 message SysInfo {
     uint64 cpus = 1;
     uint64 ram = 2;
+}
+
+message Update {
+    oneof kind {
+        JobUpdate job_update = 1;
+    }
+}
+
+message JobUpdate {
+    string guid = 1;
+    string status_msg = 2;
+}
+
+message JobInfoContainerList {
+    repeated JobInfoContainer jobs = 1;
+}
+
+message JobInfoContainer {
+    JobInfo info = 1;
+    JobRuntimeInfo runtime_info = 2;
+}
+
+message JobRuntimeInfo {
+    string status_msg = 1;
 }

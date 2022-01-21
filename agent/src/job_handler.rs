@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use bollard::{
@@ -10,37 +10,29 @@ use dashmap::DashMap;
 use futures::StreamExt;
 use tokio::task;
 use tonic::{Request, Response, Status};
+use tokio::sync::mpsc::Sender;
+use crate::jobs::Jobs;
 
-use agent::job_server::Job;
-use agent::{JobGuid, JobInfo, JobRequestResult, JobsList};
+use crate::protos::agent::job_server::Job;
+use crate::protos::agent::{Empty, JobGuid, JobRequestResult, JobsList, JobInfo, Update, JobRuntimeInfo, JobInfoContainer, JobInfoContainerList};
 
 pub mod agent {
     tonic::include_proto!("agent");
 }
 
 #[derive(Debug)]
-pub struct RuntimeInfo {
-    state: String,
-    started: Option<Instant>,
-}
-
-#[derive(Debug)]
-pub struct JobInfoContainer {
-    info: JobInfo, // JobInfo from create container request
-    runtime_info: RuntimeInfo,
-}
-
-#[derive(Debug)]
 pub struct JobHandler {
+    updates: Arc<RwLock<Option<Sender<Update>>>>,
     docker: Arc<Docker>,
-    jobs: Arc<DashMap<String, JobInfoContainer>>,
+    jobs: Arc<Jobs>,
 }
 
 impl JobHandler {
-    pub fn new(docker: Docker) -> JobHandler {
+    pub fn new(updates: Arc<RwLock<Option<Sender<Update>>>>, docker: Docker) -> JobHandler {
         JobHandler {
+            updates: updates,
             docker: Arc::new(docker),
-            jobs: Arc::new(DashMap::new()),
+            jobs: Arc::new(Jobs::new()),
         }
     }
 }
@@ -55,23 +47,16 @@ impl Job for JobHandler {
 
         let req = request.into_inner();
 
-        let reply = agent::JobRequestResult {
+        let reply = JobRequestResult {
             message: format!("Received request {}!", &req.guid).into(),
         };
 
-        self.jobs.insert(
-            req.guid.clone(),
-            JobInfoContainer {
-                info: req.clone(),
-                runtime_info: RuntimeInfo {
-                    state: "ImagePulling".to_string(),
-                    started: None,
-                },
-            },
+        self.jobs.create(
+            req.clone()
         );
 
         task::spawn({
-            let jobs = Arc::clone(&self.jobs);
+            let jobs = self.jobs.clone();
             let docker = Arc::clone(&self.docker);
             async move {
                 let options = Some(CreateImageOptions {
@@ -85,9 +70,7 @@ impl Job for JobHandler {
                         Some(state) => match state {
                             Ok(imageinfo) => match imageinfo.status {
                                 Some(status) => {
-                                    jobs.get_mut(&req.guid).unwrap().runtime_info.state =
-                                        format!("Docker: {:?}", &status);
-                                    println!("State {:?}", status);
+                                    jobs.update_status(&req.guid, format!("Docker: {:?}", status));
                                 }
                                 None => {}
                             },
@@ -161,7 +144,7 @@ impl Job for JobHandler {
         let req = request.into_inner();
         let message;
 
-        match self.jobs.remove(&req.guid) {
+        match self.jobs.destroy(&req.guid) {
             Some(_job) => {
                 message = format!("Job {} has been destroyed", &req.guid);
             }
@@ -171,16 +154,19 @@ impl Job for JobHandler {
         }
 
         println!("{}", message);
-        let reply = agent::JobRequestResult { message: message };
+        let reply = JobRequestResult { message: message };
         Ok(Response::new(reply))
     }
 
-    async fn list(&self, _request: Request<JobGuid>) -> Result<Response<JobsList>, Status> {
-        let jobs = Arc::clone(&self.jobs);
-        let reply = agent::JobsList {
-            guids: jobs.iter().map(|k| k.key().clone()).collect(),
+    async fn list(&self, _request: Request<Empty>) -> Result<Response<JobsList>, Status> {
+        let reply = JobsList {
+            guids: self.jobs.guids(),
         };
 
         Ok(Response::new(reply))
+    }
+
+    async fn get_all(&self, _: Request<Empty>) -> Result<Response<JobInfoContainerList>, Status> {
+        Ok(Response::new(JobInfoContainerList { jobs: self.jobs.get_all() }))
     }
 }

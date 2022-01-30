@@ -9,9 +9,9 @@ use sqlx::SqlitePool;
 use tera::Tera;
 use tokio::sync::mpsc::{self, Sender};
 
-mod protos;
 mod agent_com;
 mod broker;
+mod protos;
 
 use broker::{broker, Event};
 
@@ -44,6 +44,22 @@ async fn agents() -> HttpResponse {
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
+
+#[get("/jobs")]
+async fn jobs() -> HttpResponse {
+    match TEMPLATES.render("jobs.html", &tera::Context::new()) {
+        Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
+// #[get("/jobs/{guid}")]
+// async fn jobs() -> HttpResponse {
+//     match TEMPLATES.render("job_page.html", &tera::Context::new()) {
+//         Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
+//         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+//     }
+// }
 
 async fn add_existing_agents(tx: &Sender<Event>, db_pool: &SqlitePool) {
     match Agent::get_all(&db_pool).await {
@@ -79,6 +95,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(tx.clone()))
             .service(index)
             .service(agents)
+            .service(jobs)
             .service(
                 Files::new("/static", "static/")
                     .prefer_utf8(true)

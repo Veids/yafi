@@ -36,3 +36,82 @@
   <!-- /.modal-dialog -->
 </div>
 <!-- /.modal -->
+
+<div class="modal fade" id="modal-add-job">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Add Job</h4>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" class="form-control" id="name" placeholder="Enter name">
+          </div>
+          <div class="form-group">
+            <label for="description">Description</label>
+            <input type="text" class="form-control" id="description" placeholder="Enter description">
+          </div>
+          <div class="form-group">
+            <label for="agent-type">Agent type</label>
+            <select class="custom-select form-control-border" id="job-agent-type">
+              <option class="agent-linux">linux</option>
+              <option class="agent-windows">windows</option>
+            </select>
+          </div>
+          <div class="form-group docker-image">
+            <label for="image">Docker image</label>
+            <input type="text" class="form-control" id="image" placeholder="repo/fuzzbox:latest">
+          </div>
+          <div class="form-row">
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="cpus">CPUs</label>
+                <input type="number" class="form-control" id="cpus" placeholder="Enter number of CPUs">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="ram">RAM</label>
+                <input type="number" class="form-control" id="ram" data-toggle="tooltip" title="Without specifying it will run without any bounds (e.g. '-m none')" placeholder="Allocated memory">
+              </div>
+            </div>
+          </div>
+          <div class="form-group docker-image">
+            <label for="timeout">Timeout</label>
+            <input type="text" class="form-control" id="timeout" placeholder="12h">
+          </div>
+          <div class="form-group">
+            <label for="upload-target">Fuzzing Target (.zip)</label>
+            <div class="input-group">
+              <div class="custom-file">
+                <input type="file" class="custom-file-input" id="upload-target">
+                <label class="custom-file-label" for="upload-target">Choose file</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="upload-corpus">Corpus (.zip)</label>
+            <div class="input-group">
+              <div class="custom-file">
+                <input type="file" class="custom-file-input" id="upload-corpus">
+                <label class="custom-file-label" for="upload-corpus">Choose file</label>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary">Confirm</button>
+      </div>
+    </div>
+    <!-- /.modal-content -->
+  </div>
+  <!-- /.modal-dialog -->
+</div>
+<!-- /.modal -->

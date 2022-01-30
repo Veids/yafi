@@ -22,11 +22,13 @@ message JobInfo {
     string guid = 1;
     string name = 2;
     string description = 3;
-    uint32 cores = 4;
-    uint32 memory = 5;
-    string image = 6;
-    string corpus = 7;
-    uint32 timeout = 8;
+    string agent_type = 4;
+    string image = 5;
+    uint64 cpus = 6;
+    uint64 ram = 7;
+    string timeout = 8;
+    string target = 9;
+    string corpus = 10;
 }
 
 message JobRequestResult {

@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use crate::protos::agent::{JobInfo, JobInfoContainer, JobRuntimeInfo};
+use dashmap::DashMap;
 
 #[derive(Debug)]
 pub struct Jobs {
-    jobs: DashMap<String, JobInfoContainer>
+    jobs: DashMap<String, JobInfoContainer>,
 }
 
 impl Jobs {
     pub fn new() -> Jobs {
         Jobs {
-            jobs: DashMap::new()
+            jobs: DashMap::new(),
         }
     }
 
@@ -25,9 +25,9 @@ impl Jobs {
             JobInfoContainer {
                 info: Some(job_info),
                 runtime_info: Some(JobRuntimeInfo {
-                    status_msg: "init".to_string()
-                })
-            }
+                    status_msg: "init".to_string(),
+                }),
+            },
         );
     }
 

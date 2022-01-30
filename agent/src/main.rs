@@ -6,8 +6,8 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::Sender;
 
 mod protos;
-use protos::agent::system_info_server::SystemInfoServer;
 use protos::agent::job_server::JobServer;
+use protos::agent::system_info_server::SystemInfoServer;
 use protos::agent::updates_server::UpdatesServer;
 use protos::agent::Update;
 

@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
+use crate::jobs::Jobs;
 use bollard::{
     container::{Config, WaitContainerOptions},
     image::CreateImageOptions,
@@ -8,17 +9,15 @@ use bollard::{
 };
 use dashmap::DashMap;
 use futures::StreamExt;
+use tokio::sync::mpsc::Sender;
 use tokio::task;
 use tonic::{Request, Response, Status};
-use tokio::sync::mpsc::Sender;
-use crate::jobs::Jobs;
 
 use crate::protos::agent::job_server::Job;
-use crate::protos::agent::{Empty, JobGuid, JobRequestResult, JobsList, JobInfo, Update, JobRuntimeInfo, JobInfoContainer, JobInfoContainerList};
-
-pub mod agent {
-    tonic::include_proto!("agent");
-}
+use crate::protos::agent::{
+    Empty, JobGuid, JobInfo, JobInfoContainer, JobInfoContainerList, JobRequestResult,
+    JobRuntimeInfo, JobsList, Update,
+};
 
 #[derive(Debug)]
 pub struct JobHandler {
@@ -51,9 +50,7 @@ impl Job for JobHandler {
             message: format!("Received request {}!", &req.guid).into(),
         };
 
-        self.jobs.create(
-            req.clone()
-        );
+        self.jobs.create(req.clone());
 
         task::spawn({
             let jobs = self.jobs.clone();
@@ -167,6 +164,8 @@ impl Job for JobHandler {
     }
 
     async fn get_all(&self, _: Request<Empty>) -> Result<Response<JobInfoContainerList>, Status> {
-        Ok(Response::new(JobInfoContainerList { jobs: self.jobs.get_all() }))
+        Ok(Response::new(JobInfoContainerList {
+            jobs: self.jobs.get_all(),
+        }))
     }
 }

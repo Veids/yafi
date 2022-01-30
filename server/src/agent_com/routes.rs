@@ -1,12 +1,21 @@
+use std::io::prelude::*;
 use std::sync::Arc;
+use std::{
+    env,
+    fs::{self, File},
+    path::Path,
+};
 
-use actix_web::{delete, get, post, web, HttpResponse, Responder};
+use actix_multipart::{Field, Multipart};
+use actix_web::{delete, get, post, web, Error, HttpResponse, Responder};
+use futures::StreamExt;
 use sqlx::SqlitePool;
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
 use crate::agent_com::{Agent, AgentCreateRequest};
 use crate::broker::Event;
+use crate::protos::agent::JobInfo;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -14,7 +23,10 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .service(get_all)
             .service(get_by_guid)
             .service(create)
-            .service(delete),
+            .service(delete)
+            .service(create_job)
+            .service(get_job_stats)
+            .service(get_jobs),
     );
 }
 
@@ -67,8 +79,7 @@ async fn create(
                 agent_type: agent_req.agent_type,
                 endpoint: agent_req.endpoint,
                 status: "init".to_string(),
-                cpus: None,
-                ram: None,
+                ..Default::default()
             };
         }
         _ => {
@@ -108,6 +119,168 @@ async fn delete(
         Err(err) => {
             println!("error deleting agent: {}", err);
             HttpResponse::InternalServerError().body("Todo not found")
+        }
+    }
+}
+
+async fn fetch_file(mut field: Field, path: &Path) -> Result<(), Error> {
+    let mut target = fs::File::create(path)?;
+    while let Some(chunk) = field.next().await {
+        target.write_all(&chunk?)?;
+    }
+    Ok(())
+}
+
+async fn process_job_create(payload: &mut Multipart, job_dir: &Path) -> Result<JobInfo, Error> {
+    let mut job_info = JobInfo {
+        ..Default::default()
+    };
+    while let Some(item) = payload.next().await {
+        let mut field = item?;
+
+        let name = field.content_disposition().get_name().unwrap().to_string();
+        match name.as_ref() {
+            "target" => {
+                fetch_file(field, &job_dir.join("target.zip")).await?;
+                job_info.target = "target.zip".to_string();
+            }
+            "corpus" => {
+                fetch_file(field, &job_dir.join("corpus.zip")).await?;
+                job_info.corpus = "corpus.zip".to_string();
+            }
+            _ => match field.next().await {
+                Some(chunk) => match chunk {
+                    Ok(chunk) => match name.as_ref() {
+                        "name" => {
+                            job_info.name = std::str::from_utf8(&chunk).unwrap_or("").to_string();
+                        }
+                        "description" => {
+                            job_info.description = std::str::from_utf8(&chunk).unwrap().to_string();
+                        }
+                        "agent-type" => {
+                            job_info.agent_type =
+                                std::str::from_utf8(&chunk).unwrap_or("").to_string();
+                        }
+                        "image" => {
+                            job_info.image = std::str::from_utf8(&chunk).unwrap_or("").to_string();
+                        }
+                        "cpus" => {
+                            job_info.cpus =
+                                std::str::from_utf8(&chunk).unwrap().parse::<u64>().unwrap();
+                        }
+                        "ram" => {
+                            job_info.ram =
+                                std::str::from_utf8(&chunk).unwrap().parse::<u64>().unwrap();
+                        }
+                        "timeout" => {
+                            job_info.timeout = std::str::from_utf8(&chunk).unwrap().to_string();
+                        }
+                        _ => {}
+                    },
+                    Err(err) => {}
+                },
+                _ => {}
+            },
+        }
+    }
+    Ok(job_info)
+}
+
+fn sanitize_job_info(job_info: &JobInfo) -> Result<(), Error> {
+    if job_info.agent_type == "linux" && job_info.image == "" {
+        return Err(actix_web::error::ErrorBadRequest(
+            "you haven't specified image",
+        ));
+    }
+
+    if job_info.cpus == 0 {
+        return Err(actix_web::error::ErrorBadRequest(
+            "you haven't number of cpu cores",
+        ));
+    }
+
+    if job_info.timeout != "" && job_info.timeout.parse::<humantime::Duration>().is_err() {
+        return Err(actix_web::error::ErrorBadRequest("invalid timeout format"));
+    }
+
+    if job_info.target == "" {
+        return Err(actix_web::error::ErrorBadRequest(
+            "you haven't specified target.zip",
+        ));
+    }
+
+    if job_info.corpus == "" {
+        return Err(actix_web::error::ErrorBadRequest(
+            "you haven't specified corpus.zip",
+        ));
+    }
+
+    Ok(())
+}
+
+#[post("/job")]
+async fn create_job(
+    mut payload: Multipart,
+    db_pool: web::Data<SqlitePool>,
+) -> Result<HttpResponse, Error> {
+    let mut job_info;
+    let tmp_dir = env::var("TMP_DIR").expect("Set DATABASE_URL in .env file");
+    let guid = Uuid::new_v4().to_string();
+    let job_tmp_dir = Path::new(&tmp_dir).join(&guid);
+    let data_dir = job_tmp_dir.join("data/");
+    fs::create_dir_all(&data_dir)?;
+
+    match process_job_create(&mut payload, &data_dir).await {
+        Ok(_job_info) => {
+            job_info = _job_info;
+            job_info.guid = guid;
+        }
+        Err(err) => {
+            fs::remove_dir_all(&job_tmp_dir)?;
+            return Err(err);
+        }
+    }
+
+    match sanitize_job_info(&job_info) {
+        Ok(_) => {}
+        Err(err) => {
+            fs::remove_dir_all(&job_tmp_dir)?;
+            return Err(err);
+        }
+    }
+
+    let scheduled_agents;
+    match Agent::schedule_job(&job_info, db_pool.get_ref()).await {
+        Ok(res) => scheduled_agents = res,
+        Err(err) => {
+            fs::remove_dir_all(&job_tmp_dir)?;
+            return Err(actix_web::error::ErrorBadRequest(err));
+        }
+    }
+
+    println!("Created job: {:?}", job_info);
+
+    Ok(HttpResponse::Ok().into())
+}
+
+#[get("/job")]
+async fn get_job_stats(db_pool: web::Data<SqlitePool>) -> impl Responder {
+    match Agent::get_job_stats(db_pool.get_ref()).await {
+        Ok(stats) => HttpResponse::Ok().json(stats),
+        Err(err) => {
+            println!("Error fetching job stats: {}", err);
+            HttpResponse::InternalServerError().body("Error fetching job stats")
+        }
+    }
+}
+
+#[get("/jobs")]
+async fn get_jobs(db_pool: web::Data<SqlitePool>) -> impl Responder {
+    match Agent::get_all_collections(db_pool.get_ref()).await {
+        Ok(jobs) => HttpResponse::Ok().json(jobs),
+        Err(err) => {
+            println!("Error fetching jobs: {}", err);
+            HttpResponse::InternalServerError().body("Error fetching jobs")
         }
     }
 }

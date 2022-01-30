@@ -108,8 +108,31 @@ impl AgentBroker {
         }
     }
 
+    async fn sync_jobs(&mut self) -> Result<(), String> {
+        if let Some(job_client) = &mut self.job_client {
+            let request = tonic::Request::new(Empty {});
+            match job_client.get_all(request).await {
+                Ok(response) => {
+                    println!("job_client.get_all: {:?}", response.into_inner())
+                }
+                Err(_) => Err(format!(
+                    "[AgentBroker.sync_jobs] failed to sync jobs with {}",
+                    self.guid
+                ))?,
+            }
+        } else {
+            Err(format!(
+                "[AgentBroker.sync_jobs] failed to get job_client for {}",
+                self.guid
+            ))?
+        }
+
+        Ok(())
+    }
+
     pub async fn main(&mut self, broker_messages: &mut Receiver<Request>) -> Result<(), String> {
         self.init().await?;
+        self.sync_jobs().await?;
 
         let mut stream;
         match &mut self.updates_client {

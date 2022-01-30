@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock title %}
+{% block header %}{% endblock header %}
+{% block content %}
+{% set current_page = "Jobs" %}
+{% include "navbar.html" %}
+{% include "sidebar.html" %}
+<div class="content-wrapper">
+  {% include "page_header.html" %}
+  <!-- Main content -->
+  <section class="content">
+    <div class="container-fluid">
+      <div class="row">
+        <div class="card col-12">
+          <div class="card-header">
+            <h3 class="card-title">Listing</h3>
+          </div>
+          <div class="card-body">
+            <!-- <div id="jobs-table" class="dataTables_wrapper dt-bootstrap4"> -->
+            <table id="jobs-table" class="display table table-bordered table-striped dataTable dtr-inline">
+              <thead>
+                  <tr>
+                      <th>GUID</th>
+                      <th>Name</th>
+                      <th>Description</th>
+                      <th>Created</th>
+                      <th>Agent type</th>
+                      <th>CPUs</th>
+                      <th>RAM</th>
+                      <th>Timeout</th>
+                      <th>Status</th>
+                  </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% include "modals.html" %}
+  </section>
+  <!-- /.content -->
+</div>
+{% endblock content %}

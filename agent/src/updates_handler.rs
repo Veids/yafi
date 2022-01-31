@@ -1,14 +1,13 @@
 use std::sync::Arc;
-use std::sync::RwLock;
 
-use tokio::sync::mpsc::{self, Receiver, Sender};
-// use tokio::sync::Mutex;
+use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::RwLock;
 use tokio::task;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Code, Request, Response, Status};
 
 use crate::protos::agent::updates_server::Updates;
-use crate::protos::agent::{Empty, JobInfo, JobInfoContainer, Update};
+use crate::protos::agent::{Empty, JobCreateRequest, JobInfoContainer, Update};
 
 #[derive(Debug)]
 pub struct UpdatesHandler {
@@ -32,7 +31,7 @@ impl Updates for UpdatesHandler {
 
         let (txr, mut rxr) = mpsc::channel::<Update>(100);
         {
-            let mut res = self.events_sender.write().unwrap();
+            let mut res = self.events_sender.write().await;
             if let Some(_) = *res {
                 return Err(Status::new(
                     Code::Unavailable,
@@ -61,8 +60,8 @@ impl Updates for UpdatesHandler {
                     }
                 }
                 println!("[UpdatesHandler] Server disconnected");
-                let mut res = events.write().unwrap();
-                *res = None;
+                let mut _res = &*events.write().await;
+                _res = &None;
             }
         });
 

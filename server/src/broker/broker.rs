@@ -13,7 +13,7 @@ use super::agent_broker::{AgentBroker, Request};
 pub enum Event {
     NewAgent { guid: String },
     DelAgent { guid: String },
-    AgentRequest { guid: String, req: Request },
+    AgentRequest { guid: String, request: Request },
 }
 
 pub async fn broker(db_pool: SqlitePool, mut events: Receiver<Event>) {
@@ -60,9 +60,9 @@ pub async fn broker(db_pool: SqlitePool, mut events: Receiver<Event>) {
             Event::DelAgent { guid } => {
                 trackers.remove(&guid);
             }
-            Event::AgentRequest { guid, req } => {
+            Event::AgentRequest { guid, request } => {
                 if let Some(tracker) = trackers.get_mut(&guid) {
-                    tracker.send(req).await.unwrap()
+                    tracker.send(request).await.unwrap()
                 }
             }
         }

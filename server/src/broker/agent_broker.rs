@@ -6,14 +6,16 @@ use tonic::transport::Channel;
 use crate::protos::agent::job_client::JobClient;
 use crate::protos::agent::system_info_client::SystemInfoClient;
 use crate::protos::agent::updates_client::UpdatesClient;
-use crate::protos::agent::{Empty, JobGuid, JobInfo, JobRequestResult, JobsList, SysInfo, Update};
+use crate::protos::agent::{
+    Empty, JobCreateRequest, JobGuid, JobRequestResult, JobsList, SysInfo, Update,
+};
 
 //TODO move to agent_db::AgentDb
 use crate::agent_com::Agent;
 
 #[derive(Debug)]
 pub enum Request {
-    JobCreate {},
+    JobCreate { job: JobCreateRequest },
 }
 
 #[derive(Debug)]
@@ -130,6 +132,52 @@ impl AgentBroker {
         Ok(())
     }
 
+    async fn create_job(&mut self, job: JobCreateRequest) -> Result<(), String> {
+        if let Some(job_client) = &mut self.job_client {
+            let request = tonic::Request::new(job);
+            match job_client.create(request).await {
+                Ok(response) => {
+                    println!("JobRequest successfully sent: {:?}", response.into_inner())
+                }
+                Err(err) => Err(format!(
+                    "[AgentBroker.create_job] failed to create job: {:?}",
+                    err
+                ))?,
+            }
+        } else {
+            Err(format!(
+                "[AgentBroker.create_job] failed to get job_client for {:?}",
+                self.guid
+            ))?
+        }
+
+        Ok(())
+    }
+
+    async fn free_job_resources(&self, job_guid: &String) {
+        match Agent::free_job_resources(&self.guid, &job_guid, &self.db_pool).await {
+            Ok(_) => {}
+            Err(err) => {
+                println!(
+                    "Failed to free {} job resources for {}: {:?}",
+                    job_guid, self.guid, err
+                );
+            }
+        }
+    }
+
+    async fn set_job_status(&self, job_guid: &String, status: &str) {
+        match Agent::set_job_status(&self.guid, &job_guid, &status, &self.db_pool).await {
+            Ok(_) => {}
+            Err(err) => {
+                println!(
+                    "Failed to set {} job status for {}: {:?}",
+                    job_guid, self.guid, err
+                );
+            }
+        }
+    }
+
     pub async fn main(&mut self, broker_messages: &mut Receiver<Request>) -> Result<(), String> {
         self.init().await?;
         self.sync_jobs().await?;
@@ -156,7 +204,17 @@ impl AgentBroker {
                 msg = broker_messages.recv() => {
                     match msg {
                         Some(msg) => match msg {
-                            Request::JobCreate { } => {},
+                            Request::JobCreate { job } => {
+                                let job_guid = job.job_guid.clone();
+                                match self.create_job(job).await {
+                                    Ok(_) => {},
+                                    Err(err) => {
+                                        println!("{:?}", err);
+                                        self.free_job_resources(&job_guid).await;
+                                        self.set_job_status(&job_guid, "error").await;
+                                    }
+                                }
+                            },
                         },
                         None => break
                     }

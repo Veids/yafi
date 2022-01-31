@@ -32,5 +32,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     cpus        INTEGER DEFAULT 0,
     ram         INTEGER DEFAULT 0,
     last_msg    TEXT NOT NULL,
-    status      TEXT NOT NULL
+    status      TEXT NOT NULL,
+    freed       BOOLEAN NOT NULL CHECK (freed IN (0, 1))
 );

@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::protos::agent::{JobInfo, JobInfoContainer, JobRuntimeInfo};
+use crate::protos::agent::{JobCreateRequest, JobInfoContainer, JobRuntimeInfo};
 use dashmap::DashMap;
 
 #[derive(Debug)]
@@ -19,11 +17,11 @@ impl Jobs {
         self.jobs.iter().map(|k| k.value().clone()).collect()
     }
 
-    pub fn create(&self, job_info: JobInfo) {
+    pub fn create(&self, req: JobCreateRequest) {
         self.jobs.insert(
-            job_info.guid.clone(),
+            req.job_guid.clone(),
             JobInfoContainer {
-                info: Some(job_info),
+                info: Some(req),
                 runtime_info: Some(JobRuntimeInfo {
                     status_msg: "init".to_string(),
                 }),

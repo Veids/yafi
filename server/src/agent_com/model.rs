@@ -6,7 +6,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
-use crate::protos::agent::{JobInfo, SysInfo};
+use crate::agent_com::routes::JobInfo;
+use crate::protos::agent::{JobCreateRequest, SysInfo};
 
 #[derive(Serialize, Deserialize)]
 pub struct AgentRequest {
@@ -20,14 +21,19 @@ pub struct AgentCreateRequest {
     pub endpoint: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct JobCreateRequest {
-    pub name: String,
-    pub description: String,
-    pub agent_type: String,
-    pub docker_image: String,
-    pub cpus: u64,
-    pub ram: u64,
+// #[derive(Serialize, Deserialize)]
+// pub struct JobCreateRequest {
+//     pub name: String,
+//     pub description: String,
+//     pub agent_type: String,
+//     pub docker_image: String,
+//     pub cpus: u64,
+//     pub ram: u64,
+// }
+#[derive(Debug)]
+pub struct JobRequest {
+    pub agent_guid: String,
+    pub request: JobCreateRequest,
 }
 
 impl Responder for AgentCreateRequest {
@@ -38,12 +44,15 @@ impl Responder for AgentCreateRequest {
     }
 }
 
-#[derive(Debug)]
-pub struct ScheduledAgent {
-    pub guid: String,
-    pub cpus: u64,
-    pub ram: u64,
-}
+// #[derive(Debug)]
+// pub struct ScheduledJob {
+//     pub agent_guid: String,
+//     pub collection_guid: String,
+//     pub master: bool,
+//     pub cpus: u64,
+//     pub ram: u64,
+//     pub timeout: String
+// }
 
 #[derive(Serialize, Deserialize, FromRow, Default)]
 pub struct Agent {
@@ -79,6 +88,23 @@ pub struct JobCollection {
     pub target: String,
     pub corpus: String,
     pub status: String,
+}
+
+#[derive(Serialize, Deserialize, FromRow, Default)]
+pub struct Job {
+    pub agent_guid: String,
+    pub collection_guid: String,
+    pub master: bool,
+    pub cpus: u64,
+    pub ram: u64,
+    pub last_msg: String,
+    pub status: String,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct JobInfoResponse {
+    pub job_collection: JobCollection,
+    pub jobs: Vec<Job>,
 }
 
 impl Responder for JobCollection {
@@ -275,10 +301,7 @@ impl Agent {
         Ok(rows_affected > 0)
     }
 
-    pub async fn schedule_job(
-        job_info: &JobInfo,
-        pool: &SqlitePool,
-    ) -> Result<Vec<ScheduledAgent>> {
+    pub async fn schedule_job(job_info: &JobInfo, pool: &SqlitePool) -> Result<Vec<JobRequest>> {
         let mut tx = pool.begin().await?;
 
         let rec = sqlx::query!(
@@ -303,40 +326,50 @@ impl Agent {
 
         let mut rest_cpus = job_info.cpus;
         let mut rest_ram = job_info.ram;
-        let mut scheduled_agents: Vec<ScheduledAgent> = Vec::new();
+        let mut scheduled_jobs: Vec<JobRequest> = Vec::new();
+        let mut master = true;
         for agent in rec.iter() {
-            scheduled_agents.push(ScheduledAgent {
-                guid: agent.guid.clone(),
-                cpus: std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64),
-                ram: std::cmp::min(rest_ram, agent.free_ram.unwrap_or(0) as u64),
+            scheduled_jobs.push(JobRequest {
+                agent_guid: agent.guid.clone(),
+                request: JobCreateRequest {
+                    job_guid: job_info.guid.clone(),
+                    image: job_info.image.clone(),
+                    master: master,
+                    cpus: std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64),
+                    ram: std::cmp::min(rest_ram, agent.free_ram.unwrap_or(0) as u64),
+                    timeout: job_info.timeout.clone(),
+                    target: job_info.target.clone(),
+                    corpus: job_info.corpus.clone(),
+                },
             });
             rest_cpus -= std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64);
             rest_ram -= std::cmp::min(rest_ram, agent.free_ram.unwrap_or(0) as u64);
+            master = false;
         }
 
-        for (i, agent) in scheduled_agents.iter().enumerate() {
-            let cpus = i64::try_from(agent.cpus)?;
-            let ram = i64::try_from(agent.ram)?;
+        for job in scheduled_jobs.iter() {
+            let cpus = i64::try_from(job.request.cpus)?;
+            let ram = i64::try_from(job.request.ram)?;
             sqlx::query!(
                 r#"
                 UPDATE agents
                 SET free_cpus = free_cpus - $2, free_ram = free_ram - $3
                 WHERE guid = $1
                 "#,
-                agent.guid,
+                job.agent_guid,
                 cpus,
                 ram
             )
             .execute(&mut tx)
             .await?;
 
-            let master = if i == 0 { 1 } else { 0 };
+            let master = i64::try_from(job.request.master)?;
             sqlx::query!(
                 r#"
                 INSERT INTO jobs (agent_guid, collection_guid, master, cpus, ram, last_msg, status)
                 VALUES($1, $2, $3, $4, $5, $6, $7)
                 "#,
-                agent.guid,
+                job.agent_guid,
                 job_info.guid,
                 master,
                 cpus,
@@ -372,7 +405,7 @@ impl Agent {
         .await?;
 
         tx.commit().await.unwrap();
-        Ok(scheduled_agents)
+        Ok(scheduled_jobs)
     }
 
     pub async fn get_job_stats(pool: &SqlitePool) -> Result<JobStats> {
@@ -408,4 +441,172 @@ impl Agent {
 
         Ok(job_stats)
     }
+
+    pub async fn get_job(guid: &String, pool: &SqlitePool) -> Result<JobInfoResponse> {
+        let rec = sqlx::query!(
+            "
+            SELECT guid, name, description, creation_date, agent_type, cpus, ram, timeout, target, corpus, status
+            FROM job_collection
+            WHERE guid = $1
+            ",
+            guid
+        )
+        .fetch_one(pool)
+        .await?;
+
+        let job_collection = JobCollection {
+            guid: rec.guid,
+            name: rec.name,
+            description: rec.description,
+            creation_date: rec.creation_date,
+            agent_type: rec.agent_type,
+            cpus: rec.cpus.unwrap() as u64,
+            ram: rec.ram.unwrap() as u64,
+            timeout: rec.timeout,
+            target: rec.target,
+            corpus: rec.corpus,
+            status: rec.status,
+        };
+
+        let jobs = sqlx::query!(
+            "
+            SELECT agent_guid, collection_guid, master, cpus, ram, last_msg, status
+            FROM jobs
+            WHERE collection_guid = $1
+            ",
+            guid
+        )
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|rec| Job {
+            agent_guid: rec.agent_guid,
+            collection_guid: rec.collection_guid,
+            master: rec.master,
+            cpus: rec.cpus.unwrap() as u64,
+            ram: rec.ram.unwrap() as u64,
+            last_msg: rec.last_msg,
+            status: rec.status,
+        })
+        .collect();
+
+        Ok(JobInfoResponse {
+            job_collection: job_collection,
+            jobs: jobs,
+        })
+    }
+
+    pub async fn free_job_resources(
+        job_guid: &String,
+        agent_guid: &String,
+        pool: &SqlitePool,
+    ) -> Result<()> {
+        let mut tx = pool.begin().await?;
+
+        let rec = sqlx::query!(
+            r#"
+            SELECT id, agent_guid, cpus, ram
+            FROM jobs
+            WHERE collection_guid = $1 AND agent_guid = $2 AND freed != 1
+            "#,
+            job_guid,
+            agent_guid
+        )
+        .fetch_all(pool)
+        .await?;
+
+        for job in rec.iter() {
+            sqlx::query!(
+                r#"
+                UPDATE jobs
+                SET freed = 1
+                WHERE id = $1
+                "#,
+                job.id
+            )
+            .execute(&mut tx)
+            .await?;
+
+            sqlx::query!(
+                r#"
+                UPDATE agents
+                SET free_cpus = free_cpus + $1, free_ram = free_ram + $2
+                WHERE guid = $3
+                "#,
+                job.cpus,
+                job.ram,
+                job.agent_guid
+            )
+            .execute(&mut tx)
+            .await?;
+            break;
+        }
+
+        tx.commit().await.unwrap();
+        Ok(())
+    }
+
+    pub async fn set_job_status(
+        job_guid: &String,
+        agent_guid: &String,
+        status: &str,
+        pool: &SqlitePool,
+    ) -> Result<()> {
+        let mut tx = pool.begin().await?;
+
+        sqlx::query!(
+            r#"
+            UPDATE jobs
+            SET status = $3
+            WHERE collection_guid = $1 AND agent_guid = $2
+            "#,
+            job_guid,
+            agent_guid,
+            status
+        )
+        .execute(&mut tx)
+        .await?;
+
+        tx.commit().await.unwrap();
+
+        Ok(())
+    }
+
+    // pub async fn destroy_job(guid: &String, pool: &SqlitePool) -> Result<()> {
+    //     let mut tx = pool.begin().await?;
+
+    //     let rec = sqlx::query!(
+    //         r#"
+    //         SELECT agent_guid, SUM(cpus) as cpus, SUM(ram) as ram
+    //         FROM jobs
+    //         WHERE collection_guid = $1
+    //         GROUP BY agent_guid
+    //         "#,
+    //         guid
+    //     ).execute(&mut tx)
+    //     .await?;
+
+    //     for job in rec.iter() {
+    //         sqlx::query!(
+    //         r#"
+    //         UPDATE agents
+    //         SET free_cpus = free_cpus + $1, free_ram = free_ram + $2
+    //         WHERE
+    //         "#
+    //         );
+    //     }
+
+    //     sqlx::query!(
+    //         r#"
+    //         DELETE FROM agents
+    //         WHERE guid = $1
+    //         "#,
+    //         guid
+    //     )
+    //     .execute(&mut tx)
+    //     .await?;
+
+    //     tx.commit().await.unwrap();
+    //     Ok(())
+    // }
 }

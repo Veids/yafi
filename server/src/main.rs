@@ -53,13 +53,13 @@ async fn jobs() -> HttpResponse {
     }
 }
 
-// #[get("/jobs/{guid}")]
-// async fn jobs() -> HttpResponse {
-//     match TEMPLATES.render("job_page.html", &tera::Context::new()) {
-//         Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
-//         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-//     }
-// }
+#[get("/job/{guid}")]
+async fn job() -> HttpResponse {
+    match TEMPLATES.render("job_page.html", &tera::Context::new()) {
+        Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
 
 async fn add_existing_agents(tx: &Sender<Event>, db_pool: &SqlitePool) {
     match Agent::get_all(&db_pool).await {
@@ -96,6 +96,7 @@ async fn main() -> std::io::Result<()> {
             .service(index)
             .service(agents)
             .service(jobs)
+            .service(job)
             .service(
                 Files::new("/static", "static/")
                     .prefer_utf8(true)

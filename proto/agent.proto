@@ -4,7 +4,7 @@ package agent;
 message Empty {}
 
 service Job {
-    rpc create (JobInfo) returns (JobRequestResult);
+    rpc create (JobCreateRequest) returns (JobRequestResult);
     rpc destroy (JobGUID) returns (JobRequestResult);
     rpc list (Empty) returns (JobsList);
     rpc get_all (Empty) returns (JobInfoContainerList);
@@ -18,17 +18,15 @@ service Updates {
     rpc Get(Empty) returns (stream Update) {}
 }
 
-message JobInfo {
-    string guid = 1;
-    string name = 2;
-    string description = 3;
-    string agent_type = 4;
-    string image = 5;
-    uint64 cpus = 6;
-    uint64 ram = 7;
-    string timeout = 8;
-    string target = 9;
-    string corpus = 10;
+message JobCreateRequest {
+    string job_guid = 1;
+    string image = 2;
+    bool master = 3;
+    uint64 cpus = 4;
+    uint64 ram = 5;
+    string timeout = 6;
+    string target = 7;
+    string corpus = 8;
 }
 
 message JobRequestResult {
@@ -64,7 +62,7 @@ message JobInfoContainerList {
 }
 
 message JobInfoContainer {
-    JobInfo info = 1;
+    JobCreateRequest info = 1;
     JobRuntimeInfo runtime_info = 2;
 }
 

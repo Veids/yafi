@@ -1,9 +1,9 @@
+use std::sync::Arc;
+
 use bollard::Docker;
-use tokio::sync::mpsc;
-use tonic::transport::Server;
-// use tokio::sync::Mutex;
-use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::RwLock;
+use tonic::transport::Server;
 
 mod protos;
 use protos::agent::job_server::JobServer;

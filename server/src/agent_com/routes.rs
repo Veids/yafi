@@ -1,10 +1,6 @@
 use std::io::prelude::*;
 use std::sync::Arc;
-use std::{
-    env,
-    fs::{self, File},
-    path::Path,
-};
+use std::{env, fs, path::Path};
 
 use actix_multipart::{Field, Multipart};
 use actix_web::{delete, get, post, web, Error, HttpResponse, Responder};
@@ -14,8 +10,21 @@ use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
 use crate::agent_com::{Agent, AgentCreateRequest};
-use crate::broker::Event;
-use crate::protos::agent::JobInfo;
+use crate::broker::{Event, Request};
+
+#[derive(Debug, Default)]
+pub struct JobInfo {
+    pub guid: String,
+    pub name: String,
+    pub description: String,
+    pub agent_type: String,
+    pub image: String,
+    pub cpus: u64,
+    pub ram: u64,
+    pub timeout: String,
+    pub target: String,
+    pub corpus: String,
+}
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -26,7 +35,8 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .service(delete)
             .service(create_job)
             .service(get_job_stats)
-            .service(get_jobs),
+            .service(get_jobs)
+            .service(get_job),
     );
 }
 
@@ -54,7 +64,7 @@ async fn get_by_guid(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) ->
     }
 }
 
-async fn notify_processor<T: std::fmt::Debug>(tx: Arc<Sender<T>>, agent_update: T) {
+async fn notify_processor<T: std::fmt::Debug>(tx: &Arc<Sender<T>>, agent_update: T) {
     match tx.send(agent_update).await {
         Ok(_) => (),
         Err(err) => {
@@ -90,7 +100,7 @@ async fn create(
     match Agent::create(agent, db_pool.get_ref()).await {
         Ok(agent) => {
             notify_processor(
-                tx.into_inner(),
+                &tx.into_inner(),
                 Event::NewAgent {
                     guid: agent.guid.clone(),
                 },
@@ -113,7 +123,7 @@ async fn delete(
 ) -> impl Responder {
     match Agent::delete(guid.into_inner(), db_pool.get_ref()).await {
         Ok(guid) => {
-            notify_processor(tx.into_inner(), Event::DelAgent { guid: guid.clone() }).await;
+            notify_processor(&tx.into_inner(), Event::DelAgent { guid: guid.clone() }).await;
             HttpResponse::Ok().body(format!("Succesfully deleted {} agent", guid))
         }
         Err(err) => {
@@ -148,39 +158,34 @@ async fn process_job_create(payload: &mut Multipart, job_dir: &Path) -> Result<J
                 fetch_file(field, &job_dir.join("corpus.zip")).await?;
                 job_info.corpus = "corpus.zip".to_string();
             }
-            _ => match field.next().await {
-                Some(chunk) => match chunk {
-                    Ok(chunk) => match name.as_ref() {
-                        "name" => {
-                            job_info.name = std::str::from_utf8(&chunk).unwrap_or("").to_string();
-                        }
-                        "description" => {
-                            job_info.description = std::str::from_utf8(&chunk).unwrap().to_string();
-                        }
-                        "agent-type" => {
-                            job_info.agent_type =
-                                std::str::from_utf8(&chunk).unwrap_or("").to_string();
-                        }
-                        "image" => {
-                            job_info.image = std::str::from_utf8(&chunk).unwrap_or("").to_string();
-                        }
-                        "cpus" => {
-                            job_info.cpus =
-                                std::str::from_utf8(&chunk).unwrap().parse::<u64>().unwrap();
-                        }
-                        "ram" => {
-                            job_info.ram =
-                                std::str::from_utf8(&chunk).unwrap().parse::<u64>().unwrap();
-                        }
-                        "timeout" => {
-                            job_info.timeout = std::str::from_utf8(&chunk).unwrap().to_string();
-                        }
-                        _ => {}
-                    },
-                    Err(err) => {}
-                },
-                _ => {}
-            },
+            _ => {
+                let chunk = field.next().await.unwrap()?;
+                match name.as_ref() {
+                    "name" => {
+                        job_info.name = std::str::from_utf8(&chunk).unwrap_or("").to_string();
+                    }
+                    "description" => {
+                        job_info.description = std::str::from_utf8(&chunk).unwrap().to_string();
+                    }
+                    "agent-type" => {
+                        job_info.agent_type = std::str::from_utf8(&chunk).unwrap_or("").to_string();
+                    }
+                    "image" => {
+                        job_info.image = std::str::from_utf8(&chunk).unwrap_or("").to_string();
+                    }
+                    "cpus" => {
+                        job_info.cpus =
+                            std::str::from_utf8(&chunk).unwrap().parse::<u64>().unwrap();
+                    }
+                    "ram" => {
+                        job_info.ram = std::str::from_utf8(&chunk).unwrap().parse::<u64>().unwrap();
+                    }
+                    "timeout" => {
+                        job_info.timeout = std::str::from_utf8(&chunk).unwrap().to_string();
+                    }
+                    _ => {}
+                }
+            }
         }
     }
     Ok(job_info)
@@ -222,11 +227,14 @@ fn sanitize_job_info(job_info: &JobInfo) -> Result<(), Error> {
 async fn create_job(
     mut payload: Multipart,
     db_pool: web::Data<SqlitePool>,
+    tx: web::Data<Sender<Event>>,
 ) -> Result<HttpResponse, Error> {
     let mut job_info;
     let tmp_dir = env::var("TMP_DIR").expect("Set DATABASE_URL in .env file");
+    let nfs_dir = env::var("NFS_DIR").expect("Set DATABASE_URL in .env file");
     let guid = Uuid::new_v4().to_string();
     let job_tmp_dir = Path::new(&tmp_dir).join(&guid);
+    let job_nfs_dir = Path::new(&nfs_dir).join(&guid);
     let data_dir = job_tmp_dir.join("data/");
     fs::create_dir_all(&data_dir)?;
 
@@ -249,13 +257,27 @@ async fn create_job(
         }
     }
 
-    let scheduled_agents;
+    let scheduled_jobs;
     match Agent::schedule_job(&job_info, db_pool.get_ref()).await {
-        Ok(res) => scheduled_agents = res,
+        Ok(res) => scheduled_jobs = res,
         Err(err) => {
             fs::remove_dir_all(&job_tmp_dir)?;
             return Err(actix_web::error::ErrorBadRequest(err));
         }
+    }
+
+    fs::rename(job_tmp_dir, job_nfs_dir)?;
+
+    let tx = tx.into_inner();
+    for job in scheduled_jobs {
+        notify_processor(
+            &tx,
+            Event::AgentRequest {
+                guid: job.agent_guid,
+                request: Request::JobCreate { job: job.request },
+            },
+        )
+        .await;
     }
 
     println!("Created job: {:?}", job_info);
@@ -270,6 +292,17 @@ async fn get_job_stats(db_pool: web::Data<SqlitePool>) -> impl Responder {
         Err(err) => {
             println!("Error fetching job stats: {}", err);
             HttpResponse::InternalServerError().body("Error fetching job stats")
+        }
+    }
+}
+
+#[get("/job/{guid}")]
+async fn get_job(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> impl Responder {
+    match Agent::get_job(&guid, db_pool.get_ref()).await {
+        Ok(stats) => HttpResponse::Ok().json(stats),
+        Err(err) => {
+            println!("Error fetching job: {}", err);
+            HttpResponse::InternalServerError().body("Error fetching job")
         }
     }
 }

@@ -1,5 +1,4 @@
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
+use std::sync::Arc;
 
 use crate::jobs::Jobs;
 use bollard::{
@@ -7,16 +6,16 @@ use bollard::{
     image::CreateImageOptions,
     Docker,
 };
-use dashmap::DashMap;
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::RwLock;
 use tokio::task;
 use tonic::{Request, Response, Status};
 
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
-    Empty, JobGuid, JobInfo, JobInfoContainer, JobInfoContainerList, JobRequestResult,
-    JobRuntimeInfo, JobsList, Update,
+    update::Kind::JobUpdate as JobUpdateKind, Empty, JobCreateRequest, JobGuid, JobInfoContainer,
+    JobInfoContainerList, JobRequestResult, JobRuntimeInfo, JobUpdate, JobsList, Update,
 };
 
 #[derive(Debug)]
@@ -40,18 +39,19 @@ impl JobHandler {
 impl Job for JobHandler {
     async fn create(
         &self,
-        request: Request<JobInfo>,
+        request: Request<JobCreateRequest>,
     ) -> Result<Response<JobRequestResult>, Status> {
         println!("Got a Job request: {:?}", request);
 
         let req = request.into_inner();
 
         let reply = JobRequestResult {
-            message: format!("Received request {}!", &req.guid).into(),
+            message: format!("Received request {}!", &req.job_guid).into(),
         };
 
         self.jobs.create(req.clone());
 
+        let updates = self.updates.clone();
         task::spawn({
             let jobs = self.jobs.clone();
             let docker = Arc::clone(&self.docker);
@@ -67,12 +67,26 @@ impl Job for JobHandler {
                         Some(state) => match state {
                             Ok(imageinfo) => match imageinfo.status {
                                 Some(status) => {
-                                    jobs.update_status(&req.guid, format!("Docker: {:?}", status));
+                                    jobs.update_status(
+                                        &req.job_guid,
+                                        format!("Docker: {:?}", status),
+                                    );
+                                    if let Some(tx) = &*updates.read().await {
+                                        tx.send(Update {
+                                            kind: Some(JobUpdateKind(JobUpdate {
+                                                guid: req.job_guid.clone(),
+                                                status_msg: status,
+                                            })),
+                                        })
+                                        .await;
+                                    }
                                 }
                                 None => {}
                             },
                             Err(err) => {
+                                jobs.update_status(&req.job_guid, format!("Docker: {:?}", err));
                                 println!("Bollard_err {:?}", err);
+                                return;
                             }
                         },
                         None => {

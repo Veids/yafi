@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Job Info{% endblock title %}
+{% block header %}{% endblock header %}
+{% block content %}
+{% set current_page = "Jobs" %}
+{% include "navbar.html" %}
+{% include "sidebar.html" %}
+<div class="content-wrapper">
+  {% include "page_header.html" %}
+  <!-- Main content -->
+  <section class="content">
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-md-3">
+          <div id="job-info" class="card card-primary card-outline">
+            <div class="overlay">
+              <i class="fas fa-3x fa-sync-alt fa-spin"></i>
+            </div>
+            <div class="card-body box-profile">
+              <div class="text-center">
+                <img class="profile-user-img img-fluid img-circle" src="https://upload.wikimedia.org/wikipedia/commons/f/fc/Eucalyp-Deus_Linux.png" alt="job-info-type">
+              </div>
+              <h3 id="name" class="profile-username text-center">Job name</h3>
+              <p id="description" class="text-muted text-center">Job description</p>
+              <ul class="list-group list-group-unbordered mb-3">
+                <li class="list-group-item">
+                  <i class="fas fa-fingerprint p-2 align-middle"></i>
+                  GUID
+                  <span id="guid" class="agent-badge float-right"></span>
+                </li>
+                <li class="list-group-item">
+                  <i class="far fa-calendar-alt p-2 align-middle"></i>
+                  Created
+                  <span id="created" class="agent-badge float-right"></span>
+                </li>
+                <li class="list-group-item">
+                  <div class="row">
+                    <div class="col-md-6 border-right">
+                      <i class="fas fa-microchip p-2 align-middle"></i>
+                      CPUs
+                      <span id="cpus" class="agent-badge float-right"></span>
+                    </div>
+                    <div class="col-md-6">
+                      <i class="fas fa-memory p-2 align-middle"></i>
+                      RAM
+                      <span id="ram" class="agent-badge float-right"></span>
+                    </div>
+                  </div>
+                </li>
+                <li class="list-group-item">
+                  <i class="far fa-hourglass p-2 align-middle"></i>
+                  Timeout
+                  <span id="timeout" class="agent-badge float-right"></span>
+                </li>
+                <li class="list-group-item">
+                  <i class="far fa-lightbulb p-2 align-middle"></i>
+                  Status
+                  <span id="status" class="agent-badge float-right"></span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <!-- Assigned agents Box -->
+          <div id="assigned-agents" class="card card-primary card-outline">
+            <div class="card-header">
+              <h3 class="card-title">Assigned agents</h3>
+            </div>
+            <div class="card-body">
+              <table class="table table-bordered table-hover">
+                <tbody>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- /.card -->
+        </div>
+        <!-- /.col -->
+        <div class="col-md-9">
+          <div class="card card-primary card-outline card-outline-tabs">
+            <div class="card-header p-0 border-bottom-0">
+              <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item">
+                  <a class="nav-link active" href="#stats" data-toggle="pill" role="tab" aria-controls="tab-stats">Stats</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="#coverage" data-toggle="pill" role="tab" aria-controls="tab-coverage">Coverage</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="#crashes" data-toggle="pill" role="tab" aria-controls="tab-crashes">Crashes</a>
+                </li>
+              </ul>
+            </div>
+            <div class="card-body">
+              <div class="tab-content">
+                <div class="tab-pane fade active show" role="tabpanel" aria-labelledby="tab-stats">
+                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+                </div>
+                <div class="tab-pane fade active show" role="tabpanel" aria-labelledby="tab-coverage">
+                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+                </div>
+                <div class="tab-pane fade active show" role="tabpanel" aria-labelledby="tab-crashes">
+                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /.col -->
+      </div>
+      <!-- /.row -->
+    </div>
+    {% include "modals.html" %}
+  </section>
+  <!-- /.content -->
+</div>
+{% endblock content %}

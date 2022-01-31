@@ -1,7 +1,7 @@
 function formatBytes(a,b=2,k=1024){with(Math){let d=floor(log(a)/log(k));return 0==a?"0 Bytes":parseFloat((a/pow(k,d)).toFixed(max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}}
 
 function sanitize(text){
-  return $("<div>").text(text).html();
+  return DOMPurify.sanitize(text);
 }
 
 function get_agent_icon(agent_type){
@@ -58,6 +58,62 @@ function build_agent_box(agent){
             </div>
             <!-- /.card -->
           </div>
+  `;
+}
+
+function build_job_row(job){
+  return `
+    <tr data-widget="expandable-table" aria-expanded="false">
+      <td class="text-center">${job.agent_guid}</td>
+    </tr>
+    <tr class="expandable-body d-none">
+      <td>
+        <div class="container">
+          <div class="container">
+            <strong>
+              <i class="fas fa-fingerprint"></i> Collection GUID
+            </strong>
+            <p class="text-muted mb-0">${job.collection_guid}</p>
+          </div>
+          <hr class="my-2">
+          <div class="container">
+            <strong>
+              <i class="fas fa-star"></i> Master
+            </strong>
+            <p class="text-muted mb-0">${job.master}</p>
+          </div>
+          <hr class="my-2">
+          <div class="container row">
+            <div class="col-md-6 border-right">
+              <strong class="align-middle">
+                <i class="fas fa-microchip"></i> CPUs
+              </strong>
+              <span class="agent-badge float-right">${job.cpus}</span>
+            </div>
+            <div class="col-md-6">
+              <strong class="align-middle">
+                <i class="fas fa-memory"></i> RAM
+              </strong>
+              <span class="agent-badge float-right">${job.ram}</span>
+            </div>
+          </div>
+          <hr class="my-2">
+          <div class="container">
+            <strong>
+              <i class="fas fa-sticky-note"></i> Last message
+            </strong>
+            <p class="text-muted mb-0">${job.last_msg}</p>
+          </div>
+          <hr class="my-2">
+          <div class="container">
+            <strong>
+              <i class="far fa-lightbulb"></i> Status
+            </strong>
+            <p class="text-muted mb-0">${job.status}</p>
+          </div>
+        </div>
+      </td>
+    </tr>
   `;
 }
 
@@ -159,7 +215,7 @@ function setup_modals(){
     if (name.length)
       fd.append("name", name);
     if (description.length)
-      fd.append("description", name);
+      fd.append("description", description);
     fd.append("agent-type", agent_type);
     if (agent_type == "linux" && image.length)
       fd.append("image", image);
@@ -222,7 +278,7 @@ function main(){
 
   setup_modals();
 
-  if (window.location.href.match("/$")){
+  if (window.location.pathname.match("/$")){
     $.ajax({
       url: '/api/agents',
       success: function(agents, textStatus){
@@ -247,7 +303,7 @@ function main(){
         $("#jobs_error .overlay").remove();
       }
     });
-  } else if (window.location.href.match("/agents$")) {
+  } else if (window.location.pathname.match("/agents$")) {
     $.ajax({
       url: "/api/agents",
       success: function(agents, textStatus){
@@ -277,13 +333,29 @@ function main(){
         }
       });
     });
-  } else if (window.location.href.match("/jobs$")) {
+  } else if (window.location.pathname.match("/jobs$")) {
     function renderBadge(data, type) {
       if (type === "display"){
         return `<span class="badge badge-secondary">${data}</span>`;
       }
       return data;
     }
+    function renderAgentType(data, type) {
+      if (type === "display"){
+        var icon = "";
+        switch (data) {
+          case "linux":
+            icon = "fab fa-linux";
+            break;
+          case "windows":
+            icon = "fab fa-windows";
+            break;
+        }
+        return `<i class="${icon}"></i> ${data}`;
+      }
+      return data;
+    }
+
     // var t = $("#jobs-table").DataTable();
     var t = $("#jobs-table").DataTable({
       "responsive": true,
@@ -296,10 +368,20 @@ function main(){
       },
       "columns": [
         { "data": "guid" },
-        { "data": "name" },
-        { "data": "description" },
+        {
+          "data": "name",
+          "render": $.fn.dataTable.render.text()
+        },
+        {
+         "data": "description",
+          "render": $.fn.dataTable.render.text()
+        },
         { "data": "creation_date" },
-        { "data": "agent_type" },
+        { 
+          "data": "agent_type",
+          "className": "text-center",
+          "render": renderAgentType
+        },
         { 
           "data": "cpus",
           "className": "text-center",
@@ -312,7 +394,8 @@ function main(){
         },
         { 
           "data": "timeout",
-          "className": "text-center"
+          "className": "text-center",
+          "render": $.fn.dataTable.render.text()
         },
         { 
           "data": "status",
@@ -344,7 +427,37 @@ function main(){
 
     $(t.table().container()).on("click", "tbody tr", function(){
       var row = t.row(this);
-      window.location = "jobs/" + row.data().guid;
+      window.location = "job/" + row.data().guid;
+    });
+  } else if (window.location.pathname.match("/job/.+$")) {
+    var guid = window.location.pathname.split("/").pop();
+    $.ajax({
+      url: `/api/job/${guid}`,
+      success: function(job, textStatus){
+        var card = $("#job-info");
+        card.find("#name").text(job.job_collection.name);
+        card.find("#description").text(job.job_collection.description);
+        card.find("#guid").text(job.job_collection.guid);
+        card.find("#created").text(job.job_collection.creation_date);
+        card.find("#cpus").text(job.job_collection.cpus);
+        card.find("#ram").text(job.job_collection.ram);
+        card.find("#timeout").text(job.job_collection.timeout);
+        card.find("#status").text(job.job_collection.status);
+        card.find(".overlay").remove();
+
+        var assigned_agents = $("#assigned-agents tbody"); 
+        job.jobs.forEach(job => {
+          var tr = $(build_job_row(job));
+          tr.appendTo(assigned_agents);
+          tr.ExpandableTable("init");
+        });
+      },
+      error: function(errMsg){
+        iziToast.error({
+          title: errMsg.statusText,
+          message: errMsg.responseText
+        });
+      }
     });
   }
 }

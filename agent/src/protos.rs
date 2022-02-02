@@ -2,7 +2,7 @@
 use agent::job_server::Job;
 #[allow(unused_imports)]
 use agent::{
-    update::Kind::JobUpdate, Empty, JobCreateRequest, JobGuid, JobInfoContainer, JobRequestResult,
+    update::UpdateKind::JobMsg, Empty, JobCreateRequest, JobGuid, JobRequestResult,
     JobsList,
 };
 

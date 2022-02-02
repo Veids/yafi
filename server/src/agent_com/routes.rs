@@ -231,10 +231,10 @@ async fn create_job(
 ) -> Result<HttpResponse, Error> {
     let mut job_info;
     let tmp_dir = env::var("TMP_DIR").expect("Set DATABASE_URL in .env file");
-    let nfs_dir = env::var("NFS_DIR").expect("Set DATABASE_URL in .env file");
+    let nfs_dir = env::var("NFS_DIR").expect("Set NFS_DIR in .env file");
     let guid = Uuid::new_v4().to_string();
     let job_tmp_dir = Path::new(&tmp_dir).join(&guid);
-    let job_nfs_dir = Path::new(&nfs_dir).join(&guid);
+    let job_nfs_dir = Path::new(&nfs_dir).join("jobs").join(&guid);
     let data_dir = job_tmp_dir.join("data/");
     fs::create_dir_all(&data_dir)?;
 
@@ -282,7 +282,7 @@ async fn create_job(
 
     println!("Created job: {:?}", job_info);
 
-    Ok(HttpResponse::Ok().into())
+    Ok(HttpResponse::Ok().body(job_info.guid).into())
 }
 
 #[get("/job")]

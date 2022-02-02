@@ -1,10 +1,14 @@
 use std::sync::Arc;
+use std::path::Path;
+use std::env;
 
 use crate::jobs::Jobs;
 use bollard::{
     container::{Config, WaitContainerOptions},
+    models::HostConfig,
     image::CreateImageOptions,
     Docker,
+    errors::Error as BollardError
 };
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
@@ -14,8 +18,8 @@ use tonic::{Request, Response, Status};
 
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
-    update::Kind::JobUpdate as JobUpdateKind, Empty, JobCreateRequest, JobGuid, JobInfoContainer,
-    JobInfoContainerList, JobRequestResult, JobRuntimeInfo, JobUpdate, JobsList, Update,
+    update::UpdateKind, JobMsg, JobErr, JobStatus, Empty, JobCreateRequest, JobGuid,
+    JobInfoContainerList, JobRequestResult, JobsList, Update,
 };
 
 #[derive(Debug)]
@@ -31,6 +35,145 @@ impl JobHandler {
             updates: updates,
             docker: Arc::new(docker),
             jobs: Arc::new(Jobs::new()),
+        }
+    }
+}
+
+struct JobItem {
+    req: JobCreateRequest,
+    docker: Arc<Docker>,
+    jobs: Arc<Jobs>,
+    updates: Arc<RwLock<Option<Sender<Update>>>>,
+    id: Option<String>,
+}
+
+impl JobItem {
+    pub fn new(req: JobCreateRequest, docker: Arc<Docker>, jobs: Arc<Jobs>, updates: Arc<RwLock<Option<Sender<Update>>>>) -> JobItem {
+        JobItem {
+            req: req,
+            docker: docker,
+            jobs: jobs,
+            updates: updates,
+            id: None
+        }
+    }
+
+    async fn send_update(&self, kind: UpdateKind) {
+        if let Some(tx) = &*self.updates.read().await {
+            let _ = tx.send(Update {
+                update_kind: Some(kind),
+            })
+            .await;
+        }
+    }
+
+    async fn pull_image(&self) -> Result<(), BollardError> {
+        let options = Some(CreateImageOptions {
+            from_image: self.req.image.clone(),
+            ..Default::default()
+        });
+
+        let mut stream = self.docker.create_image(options, None, None);
+        while let Some(state) = stream.next().await {
+            let imageinfo = state?;
+            if let Some(status) = imageinfo.status {
+                self.jobs.set_last_msg(
+                    &self.req.job_guid,
+                    status.to_string()
+                );
+                self.send_update(UpdateKind::JobMsg(JobMsg {
+                    guid: self.req.job_guid.clone(),
+                    last_msg: status.to_string()
+                })).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn create_container(&mut self) -> Result<(), BollardError> {
+        let nfs_dir = env::var("NFS_DIR").expect("Set NFS_DIR in .env file");
+        let job_dir = Path::new(&nfs_dir).join("jobs").join(&self.req.job_guid);
+        let mount = vec!{
+            format!("{}:/work", job_dir.into_os_string().into_string().unwrap())
+        };
+        let config = Config {
+            image: Some(self.req.image.clone()),
+            host_config: Some(HostConfig{
+                binds: Some(mount),
+                ..Default::default()
+            }),
+            cmd: Some(vec!["echo".to_string(), "hello world".to_string()]),
+            ..Default::default()
+        };
+
+
+        self.id = Some(self.docker.create_container::<&str, String>(None, config).await?.id);
+        Ok(())
+    }
+
+    async fn start_container(&self) -> Result<(), BollardError> {
+        let res = self.docker.start_container::<String>(self.id.as_ref().unwrap(), None).await?;
+
+        self.jobs.set_status(
+            &self.req.job_guid,
+            "alive"
+        );
+
+        self.send_update(UpdateKind::JobStatus(JobStatus{
+            guid: self.req.job_guid.clone(),
+            status: "alive".to_string()
+        })).await;
+
+        Ok(res)
+    }
+
+    async fn wait_container(&self) -> Result<(), BollardError> {
+        let mut stream = self.docker.wait_container(
+            &self.id.as_ref().unwrap(),
+            Some(WaitContainerOptions {
+                condition: "not-running",
+            }),
+        );
+
+        while let Some(response) = stream.next().await {
+            println!("Container exited: {:?}", response);
+            self.send_update(UpdateKind::JobStatus(JobStatus{
+                guid: self.req.job_guid.clone(),
+                status: "completed".to_string()
+            })).await;
+            self.jobs.set_status(
+                &self.req.job_guid,
+                "completed"
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn remove_container(&mut self) -> Result<(), BollardError> {
+        let res = self.docker.remove_container(&self.id.as_ref().unwrap(), None).await?;
+        self.id = None;
+        Ok(res)
+    }
+
+    async fn handle(&mut self) -> Result<(), BollardError> {
+        self.pull_image().await?;
+        self.create_container().await?;
+        self.start_container().await?;
+        self.wait_container().await?;
+        self.remove_container().await
+    }
+
+    pub async fn main(&mut self) {
+        match self.handle().await {
+            Ok(_) => {},
+            Err(err) => {
+                self.send_update(UpdateKind::JobErr(JobErr {
+                    guid: self.req.job_guid.clone(),
+                    last_msg: err.to_string()
+                })).await;
+            }
         }
     }
 }
@@ -51,95 +194,10 @@ impl Job for JobHandler {
 
         self.jobs.create(req.clone());
 
-        let updates = self.updates.clone();
         task::spawn({
-            let jobs = self.jobs.clone();
-            let docker = Arc::clone(&self.docker);
+            let mut job_item = JobItem::new(req, self.docker.clone(), self.jobs.clone(), self.updates.clone());
             async move {
-                let options = Some(CreateImageOptions {
-                    from_image: req.image.clone(),
-                    ..Default::default()
-                });
-
-                let mut stream = docker.create_image(options, None, None);
-                loop {
-                    match stream.next().await {
-                        Some(state) => match state {
-                            Ok(imageinfo) => match imageinfo.status {
-                                Some(status) => {
-                                    jobs.update_status(
-                                        &req.job_guid,
-                                        format!("Docker: {:?}", status),
-                                    );
-                                    if let Some(tx) = &*updates.read().await {
-                                        tx.send(Update {
-                                            kind: Some(JobUpdateKind(JobUpdate {
-                                                guid: req.job_guid.clone(),
-                                                status_msg: status,
-                                            })),
-                                        })
-                                        .await;
-                                    }
-                                }
-                                None => {}
-                            },
-                            Err(err) => {
-                                jobs.update_status(&req.job_guid, format!("Docker: {:?}", err));
-                                println!("Bollard_err {:?}", err);
-                                return;
-                            }
-                        },
-                        None => {
-                            println!("Received none");
-                            break;
-                        }
-                    }
-                }
-
-                //TODO: check is image is really pulled
-                let config = Config {
-                    image: Some(req.image.clone()),
-                    cmd: Some(vec!["echo".to_string(), "hello world".to_string()]),
-                    ..Default::default()
-                };
-                match docker.create_container::<&str, String>(None, config).await {
-                    Ok(res) => {
-                        println!("Container created {:?}", res);
-
-                        match docker.start_container::<String>(&res.id, None).await {
-                            Ok(_) => {
-                                println!("Container started");
-                            }
-                            Err(err) => {
-                                println!("Bollard_err {:?}", err);
-                            }
-                        }
-
-                        let mut stream = docker.wait_container(
-                            &res.id,
-                            Some(WaitContainerOptions {
-                                condition: "not-running",
-                            }),
-                        );
-
-                        loop {
-                            match stream.next().await {
-                                Some(response) => {
-                                    println!("Container exited: {:?}", response);
-                                }
-                                None => break,
-                            }
-                        }
-
-                        match docker.remove_container(&res.id, None).await {
-                            Ok(_) => println!("Container removed"),
-                            Err(err) => println!("Bollard_err {:?}", err),
-                        }
-                    }
-                    Err(err) => {
-                        println!("Bollard_err {:?}", err);
-                    }
-                }
+                job_item.main().await;
             }
         });
 

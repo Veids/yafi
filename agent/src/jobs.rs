@@ -1,9 +1,9 @@
-use crate::protos::agent::{JobCreateRequest, JobInfoContainer, JobRuntimeInfo};
+use crate::protos::agent::JobCreateRequest;
 use dashmap::DashMap;
 
 #[derive(Debug)]
 pub struct Jobs {
-    jobs: DashMap<String, JobInfoContainer>,
+    jobs: DashMap<String, JobCreateRequest>,
 }
 
 impl Jobs {
@@ -13,29 +13,30 @@ impl Jobs {
         }
     }
 
-    pub fn get_all(&self) -> Vec<JobInfoContainer> {
+    pub fn get_all(&self) -> Vec<JobCreateRequest> {
         self.jobs.iter().map(|k| k.value().clone()).collect()
     }
 
     pub fn create(&self, req: JobCreateRequest) {
         self.jobs.insert(
             req.job_guid.clone(),
-            JobInfoContainer {
-                info: Some(req),
-                runtime_info: Some(JobRuntimeInfo {
-                    status_msg: "init".to_string(),
-                }),
-            },
+            req
         );
     }
 
-    pub fn update_status(&self, guid: &String, message: String) {
-        if let Some(rt) = &mut (*self.jobs.get_mut(guid).unwrap()).runtime_info {
-            rt.status_msg = message;
+    pub fn set_status(&self, guid: &String, status: &str) {
+        if let Some(mut rt) = self.jobs.get_mut(guid) {
+            rt.status = status.to_string();
         }
     }
 
-    pub fn destroy(&self, guid: &String) -> Option<(String, JobInfoContainer)> {
+    pub fn set_last_msg(&self, guid: &String, message: String) {
+        if let Some(mut rt) = self.jobs.get_mut(guid) {
+            rt.last_msg = message;
+        }
+    }
+
+    pub fn destroy(&self, guid: &String) -> Option<(String, JobCreateRequest)> {
         self.jobs.remove(guid)
     }
 

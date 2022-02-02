@@ -27,6 +27,8 @@ message JobCreateRequest {
     string timeout = 6;
     string target = 7;
     string corpus = 8;
+    string last_msg = 9;
+    string status = 10;
 }
 
 message JobRequestResult {
@@ -47,25 +49,28 @@ message SysInfo {
 }
 
 message Update {
-    oneof kind {
-        JobUpdate job_update = 1;
+    oneof update_kind {
+        JobMsg job_msg = 1;
+        JobErr job_err = 2;
+        JobStatus job_status = 3;
     }
 }
 
-message JobUpdate {
+message JobMsg {
     string guid = 1;
-    string status_msg = 2;
+    string last_msg = 2;
+}
+
+message JobErr {
+    string guid = 1;
+    string last_msg = 2;
+}
+
+message JobStatus {
+    string guid = 1;
+    string status = 2;
 }
 
 message JobInfoContainerList {
-    repeated JobInfoContainer jobs = 1;
-}
-
-message JobInfoContainer {
-    JobCreateRequest info = 1;
-    JobRuntimeInfo runtime_info = 2;
-}
-
-message JobRuntimeInfo {
-    string status_msg = 1;
+    repeated JobCreateRequest jobs = 1;
 }

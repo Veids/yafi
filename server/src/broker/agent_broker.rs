@@ -7,7 +7,7 @@ use crate::protos::agent::job_client::JobClient;
 use crate::protos::agent::system_info_client::SystemInfoClient;
 use crate::protos::agent::updates_client::UpdatesClient;
 use crate::protos::agent::{
-    Empty, JobCreateRequest, JobGuid, JobRequestResult, JobsList, SysInfo, Update,
+    update::UpdateKind, Empty, JobCreateRequest, JobGuid, JobRequestResult, JobsList, SysInfo,
 };
 
 //TODO move to agent_db::AgentDb
@@ -115,11 +115,17 @@ impl AgentBroker {
             let request = tonic::Request::new(Empty {});
             match job_client.get_all(request).await {
                 Ok(response) => {
-                    println!("job_client.get_all: {:?}", response.into_inner())
+                    match Agent::sync_jobs(&self.guid, response.into_inner(), &self.db_pool).await {
+                        Ok(_) => {},
+                        Err(err) => Err(format!(
+                            "[AgentBroker.sync_jobs] failed to sync jobs with {}: {:?}",
+                            self.guid, err
+                        ))?,
+                    }
                 }
-                Err(_) => Err(format!(
-                    "[AgentBroker.sync_jobs] failed to sync jobs with {}",
-                    self.guid
+                Err(err) => Err(format!(
+                    "[AgentBroker.sync_jobs] failed to sync jobs with {}: {:?}",
+                    self.guid, err
                 ))?,
             }
         } else {
@@ -154,24 +160,36 @@ impl AgentBroker {
         Ok(())
     }
 
-    async fn free_job_resources(&self, job_guid: &String) {
-        match Agent::free_job_resources(&self.guid, &job_guid, &self.db_pool).await {
-            Ok(_) => {}
-            Err(err) => {
-                println!(
-                    "Failed to free {} job resources for {}: {:?}",
-                    job_guid, self.guid, err
-                );
-            }
-        }
-    }
-
     async fn set_job_status(&self, job_guid: &String, status: &str) {
         match Agent::set_job_status(&self.guid, &job_guid, &status, &self.db_pool).await {
             Ok(_) => {}
             Err(err) => {
                 println!(
                     "Failed to set {} job status for {}: {:?}",
+                    job_guid, self.guid, err
+                );
+            }
+        }
+    }
+
+    async fn set_job_last_msg(&self, job_guid: &String, last_msg: &str) {
+        match Agent::set_job_last_msg(&self.guid, &job_guid, &last_msg, &self.db_pool).await {
+            Ok(_) => {}
+            Err(err) => {
+                println!(
+                    "Failed to set {} job last_msg for {}: {:?}",
+                    job_guid, self.guid, err
+                );
+            }
+        }
+    }
+
+    async fn complete_job(&self, job_guid: &String, last_msg: &String, status: &str) {
+        match Agent::complete_job(&self.guid, &job_guid, &last_msg, &status, &self.db_pool).await {
+            Ok(_) => {}
+            Err(err) => {
+                println!(
+                    "Failed to complete {} job for {}: {:?}",
                     job_guid, self.guid, err
                 );
             }
@@ -209,9 +227,7 @@ impl AgentBroker {
                                 match self.create_job(job).await {
                                     Ok(_) => {},
                                     Err(err) => {
-                                        println!("{:?}", err);
-                                        self.free_job_resources(&job_guid).await;
-                                        self.set_job_status(&job_guid, "error").await;
+                                        self.complete_job(&job_guid, &err.to_string(), "error").await;
                                     }
                                 }
                             },
@@ -220,7 +236,38 @@ impl AgentBroker {
                     }
                 },
                 update = stream.next() => match update {
-                    Some(update) => {},
+                    Some(update) => {
+                        match update {
+                            Ok(update) => {
+                                if let Some(kind) = update.update_kind {
+                                    match kind {
+                                        UpdateKind::JobMsg(job_update) => {
+                                            self.set_job_last_msg(&job_update.guid, &job_update.last_msg).await;
+                                        },
+                                        UpdateKind::JobErr(job_err) => {
+                                            self.complete_job(&job_err.guid, &job_err.last_msg, "error").await;
+                                        },
+                                        UpdateKind::JobStatus(job_status) => {
+                                            if job_status.status == "completed" {
+                                                self.complete_job(&job_status.guid, &"".to_string(), "completed").await;
+                                            } else {
+                                                self.set_job_status(&job_status.guid, &job_status.status).await;
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            Err(err) => { 
+                                Agent::update_status(&self.guid, "down", &self.db_pool)
+                                    .await
+                                    .unwrap();
+                                return Err(format!(
+                                    "[AgentBroker.main] error agent.UpdatesClient {} throwed an error: {:?}",
+                                    self.guid, err
+                                ))
+                            }
+                        }
+                    },
                     None => break
                 }
             }

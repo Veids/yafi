@@ -238,11 +238,11 @@ function setup_modals(){
       processData: false,
       contentType: false,
       // contentType: "multipart/form-data",
-      success: function(_, textStatus){
+      success: function(job, textStatus){
         $(modal).modal("hide");
         iziToast.success({
           title: "OK",
-          message: "Job successfully created!"
+          message: "Job successfully created!",
         });
       },
       error: function(errMsg) {
@@ -413,7 +413,7 @@ function main(){
                   badge = "badge-success";
                   break;
                 case "error":
-                  badge = "badge-error";
+                  badge = "badge-danger";
                   break;
               }
               return `<span class="badge ${badge}">${data}</span>`;

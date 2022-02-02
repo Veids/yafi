@@ -7,7 +7,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Code, Request, Response, Status};
 
 use crate::protos::agent::updates_server::Updates;
-use crate::protos::agent::{Empty, JobCreateRequest, JobInfoContainer, Update};
+use crate::protos::agent::{Empty, Update};
 
 #[derive(Debug)]
 pub struct UpdatesHandler {
@@ -26,7 +26,7 @@ impl UpdatesHandler {
 impl Updates for UpdatesHandler {
     type GetStream = ReceiverStream<Result<Update, Status>>;
 
-    async fn get(&self, _request: Request<Empty>) -> Result<Response<Self::GetStream>, Status> {
+    async fn get(&self, req: Request<Empty>) -> Result<Response<Self::GetStream>, Status> {
         let (tx, rx) = mpsc::channel(10);
 
         let (txr, mut rxr) = mpsc::channel::<Update>(100);
@@ -40,6 +40,10 @@ impl Updates for UpdatesHandler {
             } else {
                 *res = Some(txr);
             }
+        }
+        
+        if let Some(addr) = req.remote_addr() {
+            println!("[UpdatesHandler] Server {} connected!", addr);
         }
 
         let events = self.events_sender.clone();
@@ -60,8 +64,8 @@ impl Updates for UpdatesHandler {
                     }
                 }
                 println!("[UpdatesHandler] Server disconnected");
-                let mut _res = &*events.write().await;
-                _res = &None;
+                let mut _res = events.write().await;
+                *_res = None;
             }
         });
 

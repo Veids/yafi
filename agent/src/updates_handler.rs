@@ -41,7 +41,7 @@ impl Updates for UpdatesHandler {
                 *res = Some(txr);
             }
         }
-        
+
         if let Some(addr) = req.remote_addr() {
             println!("[UpdatesHandler] Server {} connected!", addr);
         }

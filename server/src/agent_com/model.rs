@@ -314,7 +314,7 @@ impl Agent {
                     target: job_info.target.clone(),
                     corpus: job_info.corpus.clone(),
                     last_msg: "".to_string(),
-                    status: "init".to_string()
+                    status: "init".to_string(),
                 },
             });
             rest_cpus -= std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64);
@@ -600,10 +600,19 @@ impl Agent {
         Ok(())
     }
 
-    pub async fn sync_jobs(agent_guid: &String, jobs: JobInfoContainerList, pool: &SqlitePool) -> Result<()> {
+    pub async fn sync_jobs(
+        agent_guid: &String,
+        jobs: JobInfoContainerList,
+        pool: &SqlitePool,
+    ) -> Result<()> {
         // let mut tx = pool.begin().await?;
-        
-        let collection_guids = jobs.jobs.iter().map(|job| job.job_guid.clone()).collect::<Vec<String>>().join(",");
+
+        let collection_guids = jobs
+            .jobs
+            .iter()
+            .map(|job| job.job_guid.clone())
+            .collect::<Vec<String>>()
+            .join(",");
 
         let to_complete = sqlx::query!(
             r#"
@@ -618,12 +627,26 @@ impl Agent {
         .await?;
 
         for collection in to_complete.iter() {
-            Self::complete_job(&agent_guid, &collection.collection_guid, &"unknown".to_string(), "completed", &pool).await?;
+            Self::complete_job(
+                &agent_guid,
+                &collection.collection_guid,
+                &"unknown".to_string(),
+                "completed",
+                &pool,
+            )
+            .await?;
         }
 
         for job in jobs.jobs.iter() {
             if job.status == "error" || job.status == "completed" {
-                Self::complete_job(&agent_guid, &job.job_guid, &job.last_msg, job.status.as_ref(), &pool).await?;
+                Self::complete_job(
+                    &agent_guid,
+                    &job.job_guid,
+                    &job.last_msg,
+                    job.status.as_ref(),
+                    &pool,
+                )
+                .await?;
             } else {
                 sqlx::query!(
                     r#"

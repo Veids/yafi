@@ -116,7 +116,7 @@ impl AgentBroker {
             match job_client.get_all(request).await {
                 Ok(response) => {
                     match Agent::sync_jobs(&self.guid, response.into_inner(), &self.db_pool).await {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(err) => Err(format!(
                             "[AgentBroker.sync_jobs] failed to sync jobs with {}: {:?}",
                             self.guid, err
@@ -257,7 +257,7 @@ impl AgentBroker {
                                     }
                                 }
                             },
-                            Err(err) => { 
+                            Err(err) => {
                                 Agent::update_status(&self.guid, "down", &self.db_pool)
                                     .await
                                     .unwrap();

@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use std::env;
+use std::sync::Arc;
 
 use bollard::Docker;
+use dotenv::dotenv;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tonic::transport::Server;
-use dotenv::dotenv;
 
 mod protos;
 use protos::agent::job_server::JobServer;

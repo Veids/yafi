@@ -1,14 +1,14 @@
-use std::sync::Arc;
-use std::path::Path;
 use std::env;
+use std::path::Path;
+use std::sync::Arc;
 
 use crate::jobs::Jobs;
 use bollard::{
     container::{Config, WaitContainerOptions},
-    models::HostConfig,
+    errors::Error as BollardError,
     image::CreateImageOptions,
+    models::HostConfig,
     Docker,
-    errors::Error as BollardError
 };
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
@@ -18,8 +18,8 @@ use tonic::{Request, Response, Status};
 
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
-    update::UpdateKind, JobMsg, JobErr, JobStatus, Empty, JobCreateRequest, JobGuid,
-    JobInfoContainerList, JobRequestResult, JobsList, Update,
+    update::UpdateKind, Empty, JobCreateRequest, JobErr, JobGuid, JobInfoContainerList, JobMsg,
+    JobRequestResult, JobStatus, JobsList, Update,
 };
 
 #[derive(Debug)]
@@ -48,22 +48,28 @@ struct JobItem {
 }
 
 impl JobItem {
-    pub fn new(req: JobCreateRequest, docker: Arc<Docker>, jobs: Arc<Jobs>, updates: Arc<RwLock<Option<Sender<Update>>>>) -> JobItem {
+    pub fn new(
+        req: JobCreateRequest,
+        docker: Arc<Docker>,
+        jobs: Arc<Jobs>,
+        updates: Arc<RwLock<Option<Sender<Update>>>>,
+    ) -> JobItem {
         JobItem {
             req: req,
             docker: docker,
             jobs: jobs,
             updates: updates,
-            id: None
+            id: None,
         }
     }
 
     async fn send_update(&self, kind: UpdateKind) {
         if let Some(tx) = &*self.updates.read().await {
-            let _ = tx.send(Update {
-                update_kind: Some(kind),
-            })
-            .await;
+            let _ = tx
+                .send(Update {
+                    update_kind: Some(kind),
+                })
+                .await;
         }
     }
 
@@ -77,14 +83,13 @@ impl JobItem {
         while let Some(state) = stream.next().await {
             let imageinfo = state?;
             if let Some(status) = imageinfo.status {
-                self.jobs.set_last_msg(
-                    &self.req.job_guid,
-                    status.to_string()
-                );
+                self.jobs
+                    .set_last_msg(&self.req.job_guid, status.to_string());
                 self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
-                    last_msg: status.to_string()
-                })).await;
+                    last_msg: status.to_string(),
+                }))
+                .await;
             }
         }
 
@@ -94,12 +99,13 @@ impl JobItem {
     async fn create_container(&mut self) -> Result<(), BollardError> {
         let nfs_dir = env::var("NFS_DIR").expect("Set NFS_DIR in .env file");
         let job_dir = Path::new(&nfs_dir).join("jobs").join(&self.req.job_guid);
-        let mount = vec!{
-            format!("{}:/work", job_dir.into_os_string().into_string().unwrap())
-        };
+        let mount = vec![format!(
+            "{}:/work",
+            job_dir.into_os_string().into_string().unwrap()
+        )];
         let config = Config {
             image: Some(self.req.image.clone()),
-            host_config: Some(HostConfig{
+            host_config: Some(HostConfig {
                 binds: Some(mount),
                 ..Default::default()
             }),
@@ -107,23 +113,28 @@ impl JobItem {
             ..Default::default()
         };
 
-
-        self.id = Some(self.docker.create_container::<&str, String>(None, config).await?.id);
+        self.id = Some(
+            self.docker
+                .create_container::<&str, String>(None, config)
+                .await?
+                .id,
+        );
         Ok(())
     }
 
     async fn start_container(&self) -> Result<(), BollardError> {
-        let res = self.docker.start_container::<String>(self.id.as_ref().unwrap(), None).await?;
+        let res = self
+            .docker
+            .start_container::<String>(self.id.as_ref().unwrap(), None)
+            .await?;
 
-        self.jobs.set_status(
-            &self.req.job_guid,
-            "alive"
-        );
+        self.jobs.set_status(&self.req.job_guid, "alive");
 
-        self.send_update(UpdateKind::JobStatus(JobStatus{
+        self.send_update(UpdateKind::JobStatus(JobStatus {
             guid: self.req.job_guid.clone(),
-            status: "alive".to_string()
-        })).await;
+            status: "alive".to_string(),
+        }))
+        .await;
 
         Ok(res)
     }
@@ -138,21 +149,22 @@ impl JobItem {
 
         while let Some(response) = stream.next().await {
             println!("Container exited: {:?}", response);
-            self.send_update(UpdateKind::JobStatus(JobStatus{
+            self.send_update(UpdateKind::JobStatus(JobStatus {
                 guid: self.req.job_guid.clone(),
-                status: "completed".to_string()
-            })).await;
-            self.jobs.set_status(
-                &self.req.job_guid,
-                "completed"
-            );
+                status: "completed".to_string(),
+            }))
+            .await;
+            self.jobs.set_status(&self.req.job_guid, "completed");
         }
 
         Ok(())
     }
 
     async fn remove_container(&mut self) -> Result<(), BollardError> {
-        let res = self.docker.remove_container(&self.id.as_ref().unwrap(), None).await?;
+        let res = self
+            .docker
+            .remove_container(&self.id.as_ref().unwrap(), None)
+            .await?;
         self.id = None;
         Ok(res)
     }
@@ -167,12 +179,13 @@ impl JobItem {
 
     pub async fn main(&mut self) {
         match self.handle().await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(err) => {
                 self.send_update(UpdateKind::JobErr(JobErr {
                     guid: self.req.job_guid.clone(),
-                    last_msg: err.to_string()
-                })).await;
+                    last_msg: err.to_string(),
+                }))
+                .await;
             }
         }
     }
@@ -195,7 +208,12 @@ impl Job for JobHandler {
         self.jobs.create(req.clone());
 
         task::spawn({
-            let mut job_item = JobItem::new(req, self.docker.clone(), self.jobs.clone(), self.updates.clone());
+            let mut job_item = JobItem::new(
+                req,
+                self.docker.clone(),
+                self.jobs.clone(),
+                self.updates.clone(),
+            );
             async move {
                 job_item.main().await;
             }

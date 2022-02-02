@@ -18,10 +18,7 @@ impl Jobs {
     }
 
     pub fn create(&self, req: JobCreateRequest) {
-        self.jobs.insert(
-            req.job_guid.clone(),
-            req
-        );
+        self.jobs.insert(req.job_guid.clone(), req);
     }
 
     pub fn set_status(&self, guid: &String, status: &str) {

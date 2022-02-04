@@ -1,7 +1,7 @@
-use std::env;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::config::CONFIG;
 use crate::jobs::Jobs;
 use bollard::{
     container::{Config, WaitContainerOptions},
@@ -11,6 +11,7 @@ use bollard::{
     Docker,
 };
 use futures::StreamExt;
+use log::info;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -19,7 +20,7 @@ use tonic::{Request, Response, Status};
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
     update::UpdateKind, Empty, JobCreateRequest, JobErr, JobGuid, JobInfoContainerList, JobMsg,
-    JobRequestResult, JobStatus, JobsList, Update,
+    JobStatus, JobsList, Update,
 };
 
 #[derive(Debug)]
@@ -32,7 +33,7 @@ pub struct JobHandler {
 impl JobHandler {
     pub fn new(updates: Arc<RwLock<Option<Sender<Update>>>>, docker: Docker) -> JobHandler {
         JobHandler {
-            updates: updates,
+            updates,
             docker: Arc::new(docker),
             jobs: Arc::new(Jobs::new()),
         }
@@ -55,10 +56,10 @@ impl JobItem {
         updates: Arc<RwLock<Option<Sender<Update>>>>,
     ) -> JobItem {
         JobItem {
-            req: req,
-            docker: docker,
-            jobs: jobs,
-            updates: updates,
+            req,
+            docker,
+            jobs,
+            updates,
             id: None,
         }
     }
@@ -97,8 +98,9 @@ impl JobItem {
     }
 
     async fn create_container(&mut self) -> Result<(), BollardError> {
-        let nfs_dir = env::var("NFS_DIR").expect("Set NFS_DIR in .env file");
-        let job_dir = Path::new(&nfs_dir).join("jobs").join(&self.req.job_guid);
+        let job_dir = Path::new(&CONFIG.nfs_dir)
+            .join("jobs")
+            .join(&self.req.job_guid);
         let mount = vec![format!(
             "{}:/work",
             job_dir.into_os_string().into_string().unwrap()
@@ -148,7 +150,7 @@ impl JobItem {
         );
 
         while let Some(response) = stream.next().await {
-            println!("Container exited: {:?}", response);
+            info!("Container exited: {:?}", response);
             self.send_update(UpdateKind::JobStatus(JobStatus {
                 guid: self.req.job_guid.clone(),
                 status: "completed".to_string(),
@@ -193,18 +195,10 @@ impl JobItem {
 
 #[tonic::async_trait]
 impl Job for JobHandler {
-    async fn create(
-        &self,
-        request: Request<JobCreateRequest>,
-    ) -> Result<Response<JobRequestResult>, Status> {
-        println!("Got a Job request: {:?}", request);
+    async fn create(&self, request: Request<JobCreateRequest>) -> Result<Response<Empty>, Status> {
+        info!("Got a Job request: {:?}", request);
 
         let req = request.into_inner();
-
-        let reply = JobRequestResult {
-            message: format!("Received request {}!", &req.job_guid).into(),
-        };
-
         self.jobs.create(req.clone());
 
         task::spawn({
@@ -219,30 +213,21 @@ impl Job for JobHandler {
             }
         });
 
-        Ok(Response::new(reply))
+        Ok(Response::new(Empty {}))
     }
 
-    async fn destroy(
-        &self,
-        request: Request<JobGuid>,
-    ) -> Result<Response<JobRequestResult>, Status> {
-        println!("Got a request: {:?}", request);
+    async fn destroy(&self, request: Request<JobGuid>) -> Result<Response<Empty>, Status> {
+        info!("Got a request: {:?}", request);
 
         let req = request.into_inner();
-        let message;
 
         match self.jobs.destroy(&req.guid) {
-            Some(_job) => {
-                message = format!("Job {} has been destroyed", &req.guid);
-            }
-            None => {
-                message = format!("Job.destroy: {} doesn't exist", &req.guid);
-            }
+            Some(_job) => Ok(Response::new(Empty {})),
+            None => Err(Status::not_found(format!(
+                "Job {} doesn't, exist",
+                &req.guid
+            ))),
         }
-
-        println!("{}", message);
-        let reply = JobRequestResult { message: message };
-        Ok(Response::new(reply))
     }
 
     async fn list(&self, _request: Request<Empty>) -> Result<Response<JobsList>, Status> {

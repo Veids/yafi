@@ -1,3 +1,5 @@
+use log::error;
+
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -47,7 +49,7 @@ pub async fn broker(db_pool: SqlitePool, mut events: Receiver<Event>) {
                             let mut agent_broker = AgentBroker::new(guid.clone(), db_pool);
                             match agent_broker.main(&mut client_receiver).await {
                                 Ok(_) => {}
-                                Err(e) => println!("{}", e),
+                                Err(e) => error!("{}", e),
                             }
                         }
                         disconnect_sender

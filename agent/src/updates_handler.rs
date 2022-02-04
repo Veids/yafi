@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use log::info;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::RwLock;
 use tokio::task;
@@ -43,7 +44,7 @@ impl Updates for UpdatesHandler {
         }
 
         if let Some(addr) = req.remote_addr() {
-            println!("[UpdatesHandler] Server {} connected!", addr);
+            info!("[UpdatesHandler] Server {} connected!", addr);
         }
 
         let events = self.events_sender.clone();
@@ -63,7 +64,7 @@ impl Updates for UpdatesHandler {
                         }
                     }
                 }
-                println!("[UpdatesHandler] Server disconnected");
+                info!("[UpdatesHandler] Server disconnected");
                 let mut _res = events.write().await;
                 *_res = None;
             }

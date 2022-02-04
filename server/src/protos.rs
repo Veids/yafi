@@ -8,7 +8,7 @@ use agent::system_info_client::SystemInfoClient;
 use agent::updates_client::UpdatesClient;
 
 #[allow(unused_imports)]
-use agent::{Empty, JobGuid, JobRequestResult, JobsList, SysInfo, Update};
+use agent::{Empty, JobGuid, JobsList, SysInfo, Update};
 
 pub mod agent {
     tonic::include_proto!("agent");

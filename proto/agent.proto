@@ -4,8 +4,8 @@ package agent;
 message Empty {}
 
 service Job {
-    rpc create (JobCreateRequest) returns (JobRequestResult);
-    rpc destroy (JobGUID) returns (JobRequestResult);
+    rpc create (JobCreateRequest) returns (Empty);
+    rpc destroy (JobGUID) returns (Empty);
     rpc list (Empty) returns (JobsList);
     rpc get_all (Empty) returns (JobInfoContainerList);
 }
@@ -29,10 +29,6 @@ message JobCreateRequest {
     string corpus = 8;
     string last_msg = 9;
     string status = 10;
-}
-
-message JobRequestResult {
-    string message = 1;
 }
 
 message JobGUID {

@@ -1,137 +1,19 @@
 use std::io::prelude::*;
-use std::sync::Arc;
-use std::{env, fs, path::Path};
+use std::{fs, path::Path};
+
+use crate::broker::{Event, Request};
+use crate::config::CONFIG;
+use crate::handlers::agent::JobInfo;
+use crate::models::Job;
+use crate::utils::notify_processor;
 
 use actix_multipart::{Field, Multipart};
-use actix_web::{delete, get, post, web, Error, HttpResponse, Responder};
+use actix_web::{get, post, web, Error, HttpResponse, Responder};
 use futures::StreamExt;
+use log::{error, info};
 use sqlx::SqlitePool;
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
-
-use crate::agent_com::{Agent, AgentCreateRequest};
-use crate::broker::{Event, Request};
-
-#[derive(Debug, Default)]
-pub struct JobInfo {
-    pub guid: String,
-    pub name: String,
-    pub description: String,
-    pub agent_type: String,
-    pub image: String,
-    pub cpus: u64,
-    pub ram: u64,
-    pub timeout: String,
-    pub target: String,
-    pub corpus: String,
-}
-
-pub fn init(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/api")
-            .service(get_all)
-            .service(get_by_guid)
-            .service(create)
-            .service(delete)
-            .service(create_job)
-            .service(get_job_stats)
-            .service(get_jobs)
-            .service(get_job),
-    );
-}
-
-#[get("/agents")]
-async fn get_all(db_pool: web::Data<SqlitePool>) -> impl Responder {
-    match Agent::get_all(db_pool.get_ref()).await {
-        Ok(agents) => HttpResponse::Ok().json(agents),
-        Err(err) => {
-            println!("Error fetching agents: {}", err);
-            HttpResponse::InternalServerError()
-                .body("Error trying to read all agents from database")
-        }
-    }
-}
-
-#[get("/agent/{guid}")]
-async fn get_by_guid(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> impl Responder {
-    match Agent::get_by_guid(&guid.into_inner(), db_pool.get_ref()).await {
-        Ok(Some(agent)) => HttpResponse::Ok().json(agent),
-        Ok(None) => HttpResponse::NotFound().body("Agent not found"),
-        Err(err) => {
-            println!("error fetching agent: {}", err);
-            HttpResponse::InternalServerError().body("Error trying to read agent from database")
-        }
-    }
-}
-
-async fn notify_processor<T: std::fmt::Debug>(tx: &Arc<Sender<T>>, agent_update: T) {
-    match tx.send(agent_update).await {
-        Ok(_) => (),
-        Err(err) => {
-            println!("Error notifying processor: {:?}", err);
-        }
-    }
-}
-
-#[post("/agent")]
-async fn create(
-    agent_req: web::Json<AgentCreateRequest>,
-    db_pool: web::Data<SqlitePool>,
-    tx: web::Data<Sender<Event>>,
-) -> impl Responder {
-    let agent_req = agent_req.into_inner();
-    let agent;
-    match agent_req.agent_type.as_ref() {
-        "linux" => {
-            agent = Agent {
-                guid: Uuid::new_v4().to_string(),
-                description: agent_req.description,
-                agent_type: agent_req.agent_type,
-                endpoint: agent_req.endpoint,
-                status: "init".to_string(),
-                ..Default::default()
-            };
-        }
-        _ => {
-            return HttpResponse::BadRequest().body("Unsupported agent type");
-        }
-    }
-
-    match Agent::create(agent, db_pool.get_ref()).await {
-        Ok(agent) => {
-            notify_processor(
-                &tx.into_inner(),
-                Event::NewAgent {
-                    guid: agent.guid.clone(),
-                },
-            )
-            .await;
-            HttpResponse::Ok().json(agent)
-        }
-        Err(err) => {
-            println!("error creating agent: {}", err);
-            HttpResponse::InternalServerError().body("Error trying to create new agent")
-        }
-    }
-}
-
-#[delete("/agent/{id}")]
-async fn delete(
-    guid: web::Path<String>,
-    db_pool: web::Data<SqlitePool>,
-    tx: web::Data<Sender<Event>>,
-) -> impl Responder {
-    match Agent::delete(guid.into_inner(), db_pool.get_ref()).await {
-        Ok(guid) => {
-            notify_processor(&tx.into_inner(), Event::DelAgent { guid: guid.clone() }).await;
-            HttpResponse::Ok().body(format!("Succesfully deleted {} agent", guid))
-        }
-        Err(err) => {
-            println!("error deleting agent: {}", err);
-            HttpResponse::InternalServerError().body("Todo not found")
-        }
-    }
-}
 
 async fn fetch_file(mut field: Field, path: &Path) -> Result<(), Error> {
     let mut target = fs::File::create(path)?;
@@ -230,11 +112,9 @@ async fn create_job(
     tx: web::Data<Sender<Event>>,
 ) -> Result<HttpResponse, Error> {
     let mut job_info;
-    let tmp_dir = env::var("TMP_DIR").expect("Set DATABASE_URL in .env file");
-    let nfs_dir = env::var("NFS_DIR").expect("Set NFS_DIR in .env file");
     let guid = Uuid::new_v4().to_string();
-    let job_tmp_dir = Path::new(&tmp_dir).join(&guid);
-    let job_nfs_dir = Path::new(&nfs_dir).join("jobs").join(&guid);
+    let job_tmp_dir = Path::new(&CONFIG.tmp_dir).join(&guid);
+    let job_nfs_dir = Path::new(&CONFIG.nfs_dir).join("jobs").join(&guid);
     let data_dir = job_tmp_dir.join("data/");
     fs::create_dir_all(&data_dir)?;
 
@@ -258,7 +138,7 @@ async fn create_job(
     }
 
     let scheduled_jobs;
-    match Agent::schedule_job(&job_info, db_pool.get_ref()).await {
+    match Job::schedule_job(&job_info, db_pool.get_ref()).await {
         Ok(res) => scheduled_jobs = res,
         Err(err) => {
             fs::remove_dir_all(&job_tmp_dir)?;
@@ -280,17 +160,17 @@ async fn create_job(
         .await;
     }
 
-    println!("Created job: {:?}", job_info);
+    info!("Created job: {:?}", job_info);
 
     Ok(HttpResponse::Ok().body(job_info.guid).into())
 }
 
 #[get("/job")]
 async fn get_job_stats(db_pool: web::Data<SqlitePool>) -> impl Responder {
-    match Agent::get_job_stats(db_pool.get_ref()).await {
+    match Job::get_job_stats(db_pool.get_ref()).await {
         Ok(stats) => HttpResponse::Ok().json(stats),
         Err(err) => {
-            println!("Error fetching job stats: {}", err);
+            error!("Error fetching job stats: {}", err);
             HttpResponse::InternalServerError().body("Error fetching job stats")
         }
     }
@@ -298,10 +178,10 @@ async fn get_job_stats(db_pool: web::Data<SqlitePool>) -> impl Responder {
 
 #[get("/job/{guid}")]
 async fn get_job(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> impl Responder {
-    match Agent::get_job(&guid, db_pool.get_ref()).await {
+    match Job::get_job(&guid, db_pool.get_ref()).await {
         Ok(stats) => HttpResponse::Ok().json(stats),
         Err(err) => {
-            println!("Error fetching job: {}", err);
+            error!("Error fetching job: {}", err);
             HttpResponse::InternalServerError().body("Error fetching job")
         }
     }
@@ -309,10 +189,10 @@ async fn get_job(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> imp
 
 #[get("/jobs")]
 async fn get_jobs(db_pool: web::Data<SqlitePool>) -> impl Responder {
-    match Agent::get_all_collections(db_pool.get_ref()).await {
+    match Job::get_all_collections(db_pool.get_ref()).await {
         Ok(jobs) => HttpResponse::Ok().json(jobs),
         Err(err) => {
-            println!("Error fetching jobs: {}", err);
+            error!("Error fetching jobs: {}", err);
             HttpResponse::InternalServerError().body("Error fetching jobs")
         }
     }

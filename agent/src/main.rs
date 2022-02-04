@@ -1,4 +1,3 @@
-use std::env;
 use std::sync::Arc;
 
 use bollard::Docker;
@@ -6,6 +5,9 @@ use dotenv::dotenv;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tonic::transport::Server;
+
+mod config;
+use crate::config::CONFIG;
 
 mod protos;
 use protos::agent::job_server::JobServer;
@@ -27,13 +29,12 @@ use updates_handler::UpdatesHandler;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    env::var("NFS_DIR").expect("Set NFS_DIR in .env file");
-    let host = env::var("LISTEN_HOST").expect("Set Host in .env file");
+    env_logger::init();
 
     let docker = Docker::connect_with_socket_defaults().unwrap();
     let tx: Arc<RwLock<Option<Sender<Update>>>> = Arc::new(RwLock::new(None));
 
-    let addr = host.parse()?;
+    let addr = CONFIG.sap_agent_listen.parse()?;
     let job_handler = JobHandler::new(tx.clone(), docker);
     let system_info_handler = SystemInfoHandler::new();
     let updates_handler = UpdatesHandler::new(tx.clone());

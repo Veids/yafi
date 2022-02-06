@@ -59,10 +59,10 @@ impl AgentBroker {
                         .await
                         .unwrap();
                 }
-                Err(format!(
+                return Err(format!(
                     "agent.JobClient {} couldn't establish connection",
                     self.guid
-                ))?
+                ))
             }
 
             if let Ok(conn) = UpdatesClient::connect(agent.endpoint.clone()).await {
@@ -73,10 +73,10 @@ impl AgentBroker {
                         .await
                         .unwrap();
                 }
-                Err(format!(
+                return Err(format!(
                     "agent.UpdatesClient {} couldn't establish connection",
                     self.guid
-                ))?
+                ))
             }
 
             if let Ok(conn) = SystemInfoClient::connect(agent.endpoint).await {
@@ -87,10 +87,10 @@ impl AgentBroker {
                         .await
                         .unwrap();
                 }
-                Err(format!(
+                return Err(format!(
                     "agent.SystemInfoClient {} coudln't establish connection",
                     self.guid
-                ))?
+                ))
             }
 
             if agent.status == "init" {
@@ -101,7 +101,7 @@ impl AgentBroker {
                                 .await
                                 .unwrap();
                         }
-                        Err(err) => Err(format!("Failed to update sys info: {err}"))?,
+                        Err(err) => return Err(format!("Failed to update sys info: {err}")),
                     }
                 }
             }
@@ -119,15 +119,13 @@ impl AgentBroker {
                 Ok(response) => {
                     match Job::sync_jobs(&self.guid, response.into_inner(), &self.db_pool).await {
                         Ok(_) => {}
-                        Err(err) => {
-                            Err(format!("failed to sync jobs with {}: {:?}", self.guid, err))?
-                        }
+                        Err(err) => return Err(format!("failed to sync jobs with {}: {:?}", self.guid, err)) 
                     }
                 }
-                Err(err) => Err(format!("failed to sync jobs with {}: {:?}", self.guid, err))?,
+                Err(err) => return Err(format!("failed to sync jobs with {}: {:?}", self.guid, err)),
             }
         } else {
-            Err(format!("failed to get job_client for {}", self.guid))?
+            return Err(format!("failed to get job_client for {}", self.guid))
         }
 
         Ok(())
@@ -138,17 +136,17 @@ impl AgentBroker {
             let request = tonic::Request::new(job);
             match job_client.create(request).await {
                 Ok(_) => {}
-                Err(err) => Err(format!("failed to create job: {:?}", err))?,
+                Err(err) => return Err(format!("failed to create job: {:?}", err)),
             }
         } else {
-            Err(format!("failed to get job_client for {:?}", self.guid))?
+            return Err(format!("failed to get job_client for {:?}", self.guid))
         }
 
         Ok(())
     }
 
-    async fn set_job_status(&self, job_guid: &String, status: &str) {
-        match Job::set_job_status(&self.guid, &job_guid, &status, &self.db_pool).await {
+    async fn set_job_status(&self, job_guid: &str, status: &str) {
+        match Job::set_job_status(&self.guid, job_guid, status, &self.db_pool).await {
             Ok(_) => {}
             Err(err) => {
                 error!(
@@ -159,8 +157,8 @@ impl AgentBroker {
         }
     }
 
-    async fn set_job_last_msg(&self, job_guid: &String, last_msg: &str) {
-        match Job::set_job_last_msg(&self.guid, &job_guid, &last_msg, &self.db_pool).await {
+    async fn set_job_last_msg(&self, job_guid: &str, last_msg: &str) {
+        match Job::set_job_last_msg(&self.guid, job_guid, last_msg, &self.db_pool).await {
             Ok(_) => {}
             Err(err) => {
                 error!(
@@ -171,8 +169,8 @@ impl AgentBroker {
         }
     }
 
-    async fn complete_job(&self, job_guid: &String, last_msg: &String, status: &str) {
-        match Job::complete_job(&self.guid, &job_guid, &last_msg, &status, &self.db_pool).await {
+    async fn complete_job(&self, job_guid: &str, last_msg: &str, status: &str) {
+        match Job::complete_job(&self.guid, job_guid, last_msg, status, &self.db_pool).await {
             Ok(_) => {}
             Err(err) => {
                 error!(

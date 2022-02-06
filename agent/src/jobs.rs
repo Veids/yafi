@@ -21,19 +21,19 @@ impl Jobs {
         self.jobs.insert(req.job_guid.clone(), req);
     }
 
-    pub fn set_status(&self, guid: &String, status: &str) {
+    pub fn set_status(&self, guid: &str, status: &str) {
         if let Some(mut rt) = self.jobs.get_mut(guid) {
             rt.status = status.to_string();
         }
     }
 
-    pub fn set_last_msg(&self, guid: &String, message: String) {
+    pub fn set_last_msg(&self, guid: &str, message: String) {
         if let Some(mut rt) = self.jobs.get_mut(guid) {
             rt.last_msg = message;
         }
     }
 
-    pub fn destroy(&self, guid: &String) -> Option<(String, JobCreateRequest)> {
+    pub fn destroy(&self, guid: &str) -> Option<(String, JobCreateRequest)> {
         self.jobs.remove(guid)
     }
 

@@ -1,5 +1,5 @@
 mod agent_broker;
-mod broker;
+mod agent_dispatcher;
 
 pub use agent_broker::*;
-pub use broker::*;
+pub use agent_dispatcher::*;

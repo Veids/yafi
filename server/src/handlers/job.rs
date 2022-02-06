@@ -74,7 +74,7 @@ async fn process_job_create(payload: &mut Multipart, job_dir: &Path) -> Result<J
 }
 
 fn sanitize_job_info(job_info: &JobInfo) -> Result<(), Error> {
-    if job_info.agent_type == "linux" && job_info.image == "" {
+    if job_info.agent_type == "linux" && job_info.image.is_empty() {
         return Err(actix_web::error::ErrorBadRequest(
             "you haven't specified image",
         ));
@@ -86,17 +86,17 @@ fn sanitize_job_info(job_info: &JobInfo) -> Result<(), Error> {
         ));
     }
 
-    if job_info.timeout != "" && job_info.timeout.parse::<humantime::Duration>().is_err() {
+    if job_info.timeout.is_empty() && job_info.timeout.parse::<humantime::Duration>().is_err() {
         return Err(actix_web::error::ErrorBadRequest("invalid timeout format"));
     }
 
-    if job_info.target == "" {
+    if job_info.target.is_empty() {
         return Err(actix_web::error::ErrorBadRequest(
             "you haven't specified target.zip",
         ));
     }
 
-    if job_info.corpus == "" {
+    if job_info.corpus.is_empty() {
         return Err(actix_web::error::ErrorBadRequest(
             "you haven't specified corpus.zip",
         ));
@@ -162,7 +162,7 @@ async fn create_job(
 
     info!("Created job: {:?}", job_info);
 
-    Ok(HttpResponse::Ok().body(job_info.guid).into())
+    Ok(HttpResponse::Ok().body(job_info.guid))
 }
 
 #[get("/job")]

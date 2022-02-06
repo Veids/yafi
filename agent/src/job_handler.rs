@@ -143,7 +143,7 @@ impl JobItem {
 
     async fn wait_container(&self) -> Result<(), BollardError> {
         let mut stream = self.docker.wait_container(
-            &self.id.as_ref().unwrap(),
+            self.id.as_ref().unwrap(),
             Some(WaitContainerOptions {
                 condition: "not-running",
             }),
@@ -165,7 +165,7 @@ impl JobItem {
     async fn remove_container(&mut self) -> Result<(), BollardError> {
         let res = self
             .docker
-            .remove_container(&self.id.as_ref().unwrap(), None)
+            .remove_container(self.id.as_ref().unwrap(), None)
             .await?;
         self.id = None;
         Ok(res)

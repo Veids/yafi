@@ -75,7 +75,7 @@ impl Agent {
         Ok(agents)
     }
 
-    pub async fn get_by_guid(guid: &String, pool: &SqlitePool) -> Result<Option<Agent>> {
+    pub async fn get_by_guid(guid: &str, pool: &SqlitePool) -> Result<Option<Agent>> {
         let rec = sqlx::query!(
             r#"
             SELECT guid, description, agent_type, endpoint, status, free_cpus, free_ram, cpus, ram
@@ -140,7 +140,7 @@ impl Agent {
     }
 
     pub async fn update_sys_info(
-        guid: &String,
+        guid: &str,
         sys_info: &SysInfo,
         pool: &SqlitePool,
     ) -> Result<bool> {
@@ -165,7 +165,7 @@ impl Agent {
         Ok(rows_affected > 0)
     }
 
-    pub async fn update_status(guid: &String, status: &str, pool: &SqlitePool) -> Result<bool> {
+    pub async fn update_status(guid: &str, status: &str, pool: &SqlitePool) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
             UPDATE agents

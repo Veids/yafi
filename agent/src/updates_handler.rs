@@ -33,7 +33,7 @@ impl Updates for UpdatesHandler {
         let (txr, mut rxr) = mpsc::channel::<Update>(100);
         {
             let mut res = self.events_sender.write().await;
-            if let Some(_) = *res {
+            if res.is_some() {
                 return Err(Status::new(
                     Code::Unavailable,
                     "Agent has been already connected",
@@ -53,7 +53,7 @@ impl Updates for UpdatesHandler {
                 loop {
                     tokio::select! {
                         event = rxr.recv() => match event {
-                            Some(event) => match tx.send(Ok(event.into())).await {
+                            Some(event) => match tx.send(Ok(event)).await {
                                 Ok(_) => (),
                                 Err(_) => break
                             },

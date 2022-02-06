@@ -4,7 +4,6 @@ use crate::protos::agent::{JobCreateRequest, JobInfoContainerList};
 use actix_http::body::BoxBody;
 use actix_web::{HttpRequest, HttpResponse, Responder};
 use anyhow::Result;
-use chrono;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 
@@ -218,7 +217,7 @@ impl Job {
         .fetch_all(pool)
         .await?;
 
-        if rec.len() == 0 {
+        if rec.is_empty() {
             return Ok(JobStats {
                 ..Default::default()
             });
@@ -241,7 +240,7 @@ impl Job {
         Ok(job_stats)
     }
 
-    pub async fn get_job(guid: &String, pool: &SqlitePool) -> Result<JobInfoResponse> {
+    pub async fn get_job(guid: &str, pool: &SqlitePool) -> Result<JobInfoResponse> {
         let rec = sqlx::query!(
             "
             SELECT guid, name, description, creation_date, agent_type, cpus, ram, timeout, target, corpus, status
@@ -296,8 +295,8 @@ impl Job {
     }
 
     pub async fn set_job_status(
-        agent_guid: &String,
-        job_guid: &String,
+        agent_guid: &str,
+        job_guid: &str,
         last_msg: &str,
         pool: &SqlitePool,
     ) -> Result<()> {
@@ -318,8 +317,8 @@ impl Job {
     }
 
     pub async fn set_job_last_msg(
-        agent_guid: &String,
-        job_guid: &String,
+        agent_guid: &str,
+        job_guid: &str,
         status: &str,
         pool: &SqlitePool,
     ) -> Result<()> {
@@ -340,9 +339,9 @@ impl Job {
     }
 
     pub async fn complete_job(
-        agent_guid: &String,
-        job_guid: &String,
-        last_msg: &String,
+        agent_guid: &str,
+        job_guid: &str,
+        last_msg: &str,
         status: &str,
         pool: &SqlitePool,
     ) -> Result<()> {
@@ -360,11 +359,11 @@ impl Job {
         .fetch_all(&mut tx)
         .await?;
 
-        if rec.len() == 0 {
+        if rec.is_empty() {
             return Ok(());
         }
 
-        for job in rec.iter() {
+        if let Some(job) = rec.get(0) {
             sqlx::query!(
                 r#"
                 UPDATE jobs
@@ -390,7 +389,6 @@ impl Job {
             )
             .execute(&mut tx)
             .await?;
-            break;
         }
 
         //Propagate status
@@ -425,7 +423,7 @@ impl Job {
     }
 
     pub async fn sync_jobs(
-        agent_guid: &String,
+        agent_guid: &str,
         jobs: JobInfoContainerList,
         pool: &SqlitePool,
     ) -> Result<()> {
@@ -452,11 +450,11 @@ impl Job {
 
         for collection in to_complete.iter() {
             Self::complete_job(
-                &agent_guid,
+                agent_guid,
                 &collection.collection_guid,
                 &"unknown".to_string(),
                 "completed",
-                &pool,
+                pool,
             )
             .await?;
         }
@@ -464,11 +462,11 @@ impl Job {
         for job in jobs.jobs.iter() {
             if job.status == "error" || job.status == "completed" {
                 Self::complete_job(
-                    &agent_guid,
+                    agent_guid,
                     &job.job_guid,
                     &job.last_msg,
                     job.status.as_ref(),
-                    &pool,
+                    pool,
                 )
                 .await?;
             } else {

@@ -10,7 +10,7 @@ use sqlx::SqlitePool;
 use tokio::sync::mpsc::{self, Sender};
 
 async fn add_existing_agents(tx: &Sender<Event>, db_pool: &SqlitePool) {
-    match Agent::get_all(&db_pool).await {
+    match Agent::get_all(db_pool).await {
         Ok(agents_vec) => {
             for agent in agents_vec {
                 tx.send(Event::NewAgent { guid: agent.guid }).await.unwrap();

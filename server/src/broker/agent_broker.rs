@@ -62,7 +62,7 @@ impl AgentBroker {
                 return Err(format!(
                     "agent.JobClient {} couldn't establish connection",
                     self.guid
-                ))
+                ));
             }
 
             if let Ok(conn) = UpdatesClient::connect(agent.endpoint.clone()).await {
@@ -76,7 +76,7 @@ impl AgentBroker {
                 return Err(format!(
                     "agent.UpdatesClient {} couldn't establish connection",
                     self.guid
-                ))
+                ));
             }
 
             if let Ok(conn) = SystemInfoClient::connect(agent.endpoint).await {
@@ -90,7 +90,7 @@ impl AgentBroker {
                 return Err(format!(
                     "agent.SystemInfoClient {} coudln't establish connection",
                     self.guid
-                ))
+                ));
             }
 
             if agent.status == "init" {
@@ -119,13 +119,20 @@ impl AgentBroker {
                 Ok(response) => {
                     match Job::sync_jobs(&self.guid, response.into_inner(), &self.db_pool).await {
                         Ok(_) => {}
-                        Err(err) => return Err(format!("failed to sync jobs with {}: {:?}", self.guid, err)) 
+                        Err(err) => {
+                            return Err(format!(
+                                "failed to sync jobs with {}: {:?}",
+                                self.guid, err
+                            ))
+                        }
                     }
                 }
-                Err(err) => return Err(format!("failed to sync jobs with {}: {:?}", self.guid, err)),
+                Err(err) => {
+                    return Err(format!("failed to sync jobs with {}: {:?}", self.guid, err))
+                }
             }
         } else {
-            return Err(format!("failed to get job_client for {}", self.guid))
+            return Err(format!("failed to get job_client for {}", self.guid));
         }
 
         Ok(())
@@ -139,7 +146,7 @@ impl AgentBroker {
                 Err(err) => return Err(format!("failed to create job: {:?}", err)),
             }
         } else {
-            return Err(format!("failed to get job_client for {:?}", self.guid))
+            return Err(format!("failed to get job_client for {:?}", self.guid));
         }
 
         Ok(())

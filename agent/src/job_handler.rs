@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::config::CONFIG;
 use crate::jobs::Jobs;
 use bollard::{
-    container::{Config, WaitContainerOptions},
+    container::{Config, WaitContainerOptions, LogsOptions},
     errors::Error as BollardError,
     image::CreateImageOptions,
     models::HostConfig,
@@ -111,7 +111,11 @@ impl JobItem {
                 binds: Some(mount),
                 ..Default::default()
             }),
-            cmd: Some(vec!["echo".to_string(), "hello world".to_string()]),
+            env: Some(vec![
+               format!("ID={}", self.req.idx),
+               format!("CPUS={}", self.req.cpus),
+               "FUZZ_DIR=/root/fuzz".to_string(),
+            ]),
             ..Default::default()
         };
 
@@ -150,13 +154,36 @@ impl JobItem {
         );
 
         while let Some(response) = stream.next().await {
+            let response = response?;
             info!("Container exited: {:?}", response);
-            self.send_update(UpdateKind::JobStatus(JobStatus {
-                guid: self.req.job_guid.clone(),
-                status: "completed".to_string(),
-            }))
-            .await;
-            self.jobs.set_status(&self.req.job_guid, "completed");
+            
+            if response.status_code == 0 {
+                self.send_update(UpdateKind::JobStatus(JobStatus {
+                    guid: self.req.job_guid.clone(),
+                    status: "completed".to_string(),
+                }))
+                .await;
+                self.jobs.set_status(&self.req.job_guid, "completed");
+            } else {
+                let mut log_stream = self.docker.logs::<String>(self.id.as_ref().unwrap(), Some(LogsOptions {
+                    stderr: true,
+                    ..Default::default()
+                }));
+
+                let mut log = String::new();
+                
+                while let Some(output) = log_stream.next().await {
+                    let output = output?;
+                    log += std::str::from_utf8(&output.into_bytes()).unwrap();
+                }
+
+                self.send_update(UpdateKind::JobErr(JobErr{
+                    guid: self.req.job_guid.clone(),
+                    last_msg: log,
+                }))
+                .await;
+                self.jobs.set_status(&self.req.job_guid, "error");
+            }
         }
 
         Ok(())

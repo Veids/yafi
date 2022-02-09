@@ -21,7 +21,7 @@ service Updates {
 message JobCreateRequest {
     string job_guid = 1;
     string image = 2;
-    bool master = 3;
+    uint64 idx = 3;
     uint64 cpus = 4;
     uint64 ram = 5;
     string timeout = 6;

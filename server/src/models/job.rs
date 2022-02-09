@@ -40,7 +40,7 @@ pub struct JobRequest {
 pub struct Job {
     pub agent_guid: String,
     pub collection_guid: String,
-    pub master: bool,
+    pub idx: u64,
     pub cpus: u64,
     pub ram: u64,
     pub last_msg: String,
@@ -123,14 +123,13 @@ impl Job {
         let mut rest_cpus = job_info.cpus;
         let mut rest_ram = job_info.ram;
         let mut scheduled_jobs: Vec<JobRequest> = Vec::new();
-        let mut master = true;
-        for agent in rec.iter() {
+        for (i, agent) in rec.iter().enumerate() {
             scheduled_jobs.push(JobRequest {
                 agent_guid: agent.guid.clone(),
                 request: JobCreateRequest {
                     job_guid: job_info.guid.clone(),
                     image: job_info.image.clone(),
-                    master,
+                    idx: i as u64,
                     cpus: std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64),
                     ram: std::cmp::min(rest_ram, agent.free_ram.unwrap_or(0) as u64),
                     timeout: job_info.timeout.clone(),
@@ -142,12 +141,12 @@ impl Job {
             });
             rest_cpus -= std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64);
             rest_ram -= std::cmp::min(rest_ram, agent.free_ram.unwrap_or(0) as u64);
-            master = false;
         }
 
         for job in scheduled_jobs.iter() {
             let cpus = i64::try_from(job.request.cpus)?;
             let ram = i64::try_from(job.request.ram)?;
+            let idx = i64::try_from(job.request.idx)?;
             sqlx::query!(
                 r#"
                 UPDATE agents
@@ -161,15 +160,14 @@ impl Job {
             .execute(&mut tx)
             .await?;
 
-            let master = i64::try_from(job.request.master)?;
             sqlx::query!(
                 r#"
-                INSERT INTO jobs (agent_guid, collection_guid, master, cpus, ram, last_msg, status)
-                VALUES($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO jobs (agent_guid, collection_guid, idx, cpus, ram, last_msg, status, freed)
+                VALUES($1, $2, $3, $4, $5, $6, $7, 0)
                 "#,
                 job.agent_guid,
                 job_info.guid,
-                master,
+                idx,
                 cpus,
                 ram,
                 "",
@@ -208,11 +206,11 @@ impl Job {
 
     pub async fn get_job_stats(pool: &SqlitePool) -> Result<JobStats> {
         let rec = sqlx::query!(
-            "
-            SELECT status, COUNT() as count
+            r#"
+            SELECT status, COUNT(*) as count
             FROM job_collection 
             GROUP BY status
-            "
+            "#
         )
         .fetch_all(pool)
         .await?;
@@ -268,7 +266,7 @@ impl Job {
 
         let jobs = sqlx::query!(
             "
-            SELECT agent_guid, collection_guid, master, cpus, ram, last_msg, status
+            SELECT agent_guid, collection_guid, idx, cpus, ram, last_msg, status
             FROM jobs
             WHERE collection_guid = $1
             ",
@@ -280,7 +278,7 @@ impl Job {
         .map(|rec| Job {
             agent_guid: rec.agent_guid,
             collection_guid: rec.collection_guid,
-            master: rec.master,
+            idx: rec.idx.unwrap() as u64,
             cpus: rec.cpus.unwrap() as u64,
             ram: rec.ram.unwrap() as u64,
             last_msg: rec.last_msg,

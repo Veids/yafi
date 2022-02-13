@@ -40,4 +40,8 @@ impl Jobs {
     pub fn guids(&self) -> Vec<String> {
         self.jobs.iter().map(|k| k.key().clone()).collect()
     }
+
+    pub fn get_status(&self, guid: &str) -> Option<String> {
+        Some(self.jobs.get(guid)?.status.clone())
+    }
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::config::CONFIG;
 use crate::jobs::Jobs;
 use bollard::{
-    container::{Config, WaitContainerOptions, LogsOptions},
+    container::{Config, CreateContainerOptions, LogsOptions, WaitContainerOptions},
     errors::Error as BollardError,
     image::CreateImageOptions,
     models::HostConfig,
@@ -19,8 +19,8 @@ use tonic::{Request, Response, Status};
 
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
-    update::UpdateKind, Empty, JobCreateRequest, JobErr, JobGuid, JobInfoContainerList, JobMsg,
-    JobStatus, JobsList, Update,
+    update::UpdateKind, Empty, JobCreateRequest, JobGuid, JobInfoContainerList, JobMsg, JobsList,
+    Update,
 };
 
 #[derive(Debug)]
@@ -88,7 +88,8 @@ impl JobItem {
                     .set_last_msg(&self.req.job_guid, status.to_string());
                 self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
-                    last_msg: status.to_string(),
+                    status: None,
+                    last_msg: Some(status.to_string()),
                 }))
                 .await;
             }
@@ -112,19 +113,18 @@ impl JobItem {
                 ..Default::default()
             }),
             env: Some(vec![
-               format!("ID={}", self.req.idx),
-               format!("CPUS={}", self.req.cpus),
-               "FUZZ_DIR=/root/fuzz".to_string(),
+                format!("ID={}", self.req.idx),
+                format!("CPUS={}", self.req.cpus),
+                "FUZZ_DIR=/root/fuzz".to_string(),
             ]),
             ..Default::default()
         };
 
-        self.id = Some(
-            self.docker
-                .create_container::<&str, String>(None, config)
-                .await?
-                .id,
-        );
+        let options = Some(CreateContainerOptions {
+            name: self.req.job_guid.clone(),
+        });
+
+        self.id = Some(self.docker.create_container(options, config).await?.id);
         Ok(())
     }
 
@@ -136,9 +136,10 @@ impl JobItem {
 
         self.jobs.set_status(&self.req.job_guid, "alive");
 
-        self.send_update(UpdateKind::JobStatus(JobStatus {
+        self.send_update(UpdateKind::JobMsg(JobMsg {
             guid: self.req.job_guid.clone(),
-            status: "alive".to_string(),
+            status: Some("alive".to_string()),
+            last_msg: None,
         }))
         .await;
 
@@ -156,30 +157,35 @@ impl JobItem {
         while let Some(response) = stream.next().await {
             let response = response?;
             info!("Container exited: {:?}", response);
-            
+
             if response.status_code == 0 {
-                self.send_update(UpdateKind::JobStatus(JobStatus {
+                self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
-                    status: "completed".to_string(),
+                    status: Some("completed".to_string()),
+                    last_msg: None,
                 }))
                 .await;
                 self.jobs.set_status(&self.req.job_guid, "completed");
             } else {
-                let mut log_stream = self.docker.logs::<String>(self.id.as_ref().unwrap(), Some(LogsOptions {
-                    stderr: true,
-                    ..Default::default()
-                }));
+                let mut log_stream = self.docker.logs::<String>(
+                    self.id.as_ref().unwrap(),
+                    Some(LogsOptions {
+                        stderr: true,
+                        ..Default::default()
+                    }),
+                );
 
                 let mut log = String::new();
-                
+
                 while let Some(output) = log_stream.next().await {
                     let output = output?;
                     log += std::str::from_utf8(&output.into_bytes()).unwrap();
                 }
 
-                self.send_update(UpdateKind::JobErr(JobErr{
+                self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
-                    last_msg: log,
+                    status: Some("error".to_string()),
+                    last_msg: Some(log),
                 }))
                 .await;
                 self.jobs.set_status(&self.req.job_guid, "error");
@@ -210,9 +216,10 @@ impl JobItem {
         match self.handle().await {
             Ok(_) => {}
             Err(err) => {
-                self.send_update(UpdateKind::JobErr(JobErr {
+                self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
-                    last_msg: err.to_string(),
+                    status: Some("error".to_string()),
+                    last_msg: Some(err.to_string()),
                 }))
                 .await;
             }
@@ -269,5 +276,20 @@ impl Job for JobHandler {
         Ok(Response::new(JobInfoContainerList {
             jobs: self.jobs.get_all(),
         }))
+    }
+
+    async fn stop(&self, request: Request<JobGuid>) -> Result<Response<Empty>, Status> {
+        let guid = request.into_inner().guid;
+
+        if let Some(status) = self.jobs.get_status(&guid) {
+            if status == "alive" || status == "init" {
+                match self.docker.stop_container(&guid, None).await {
+                    Ok(_) => return Ok(Response::new(Empty {})),
+                    Err(msg) => return Err(Status::invalid_argument(msg.to_string())),
+                }
+            }
+            return Err(Status::invalid_argument("Job has been finished"));
+        }
+        Err(Status::invalid_argument("Job not found"))
     }
 }

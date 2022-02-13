@@ -197,3 +197,34 @@ async fn get_jobs(db_pool: web::Data<SqlitePool>) -> impl Responder {
         }
     }
 }
+
+#[get("/job/{guid}/stop")]
+async fn stop_job(
+    guid: web::Path<String>,
+    db_pool: web::Data<SqlitePool>,
+    tx: web::Data<Sender<Event>>,
+) -> impl Responder {
+    let tx = tx.into_inner();
+    let guid = guid.into_inner();
+
+    match Job::get_job(&guid, db_pool.get_ref()).await {
+        Ok(job) => {
+            for agent_guid in job.jobs.into_iter().map(|x| x.agent_guid) {
+                notify_processor(
+                    &tx,
+                    Event::AgentRequest {
+                        guid: agent_guid,
+                        request: Request::JobStop { guid: guid.clone() },
+                    },
+                )
+                .await;
+            }
+
+            HttpResponse::Ok().body("Job stop request sent")
+        }
+        Err(err) => {
+            error!("Error fetching job: {}", err);
+            HttpResponse::InternalServerError().body("Error fetching job")
+        }
+    }
+}

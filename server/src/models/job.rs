@@ -4,8 +4,9 @@ use crate::protos::agent::{JobCreateRequest, JobInfoContainerList};
 use actix_http::body::BoxBody;
 use actix_web::{HttpRequest, HttpResponse, Responder};
 use anyhow::Result;
+use log::info;
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, Row, SqlitePool};
 
 #[derive(Serialize, Deserialize, FromRow, Default)]
 pub struct JobCollection {
@@ -227,7 +228,7 @@ impl Job {
 
         for stat in rec.iter() {
             match stat.status.as_ref() {
-                "up" => job_stats.alive += stat.count.unwrap() as u64,
+                "alive" => job_stats.alive += stat.count.unwrap() as u64,
                 "init" => job_stats.alive += stat.count.unwrap() as u64,
                 "completed" => job_stats.completed = stat.count.unwrap() as u64,
                 "error" => job_stats.error = stat.count.unwrap() as u64,
@@ -292,10 +293,66 @@ impl Job {
         })
     }
 
+    async fn propagate_status(job_guid: &str, pool: &SqlitePool) -> Result<()> {
+        let mut tx = pool.begin().await?;
+
+        let statuses = sqlx::query!(
+            r#"
+            SELECT status, COUNT(*) as count
+            FROM jobs
+            WHERE collection_guid = $1
+            "#,
+            job_guid
+        )
+        .fetch_all(&mut tx)
+        .await?;
+
+        let mut errors = 0;
+        let mut alive = 0;
+        // let mut completed = 0;
+        let mut init = 0;
+
+        for stat in statuses.iter() {
+            match stat.status.as_ref() {
+                "alive" => alive = stat.count.unwrap() as u64,
+                "init" => init = stat.count.unwrap() as u64 as u64,
+                // "completed" => completed = stat.count.unwrap() as u64,
+                "error" => errors = stat.count.unwrap() as u64,
+                _ => {}
+            }
+        }
+
+        let status;
+        if errors != 0 {
+            status = "error";
+        } else if init != 0 {
+            status = "init";
+        } else if alive != 0 {
+            status = "alive";
+        } else {
+            status = "completed";
+        }
+
+        sqlx::query!(
+            r#"
+            UPDATE job_collection
+            SET status = $2
+            WHERE guid = $1
+            "#,
+            job_guid,
+            status
+        )
+        .execute(&mut tx)
+        .await?;
+
+        tx.commit().await.unwrap();
+        Ok(())
+    }
+
     pub async fn set_job_status(
         agent_guid: &str,
         job_guid: &str,
-        last_msg: &str,
+        status: &str,
         pool: &SqlitePool,
     ) -> Result<()> {
         sqlx::query!(
@@ -306,10 +363,12 @@ impl Job {
             "#,
             job_guid,
             agent_guid,
-            last_msg
+            status
         )
         .execute(pool)
         .await?;
+
+        Self::propagate_status(job_guid, pool).await?;
 
         Ok(())
     }
@@ -389,34 +448,38 @@ impl Job {
             .await?;
         }
 
-        //Propagate status
-        let rec = sqlx::query!(
-            r#"
-            SELECT id FROM jobs
-            WHERE collection_guid = $1 AND freed != 1
-            LIMIT 1
-            "#,
-            job_guid
-        )
-        .fetch_one(&mut tx)
-        .await;
-
-        //Status from error cannot be changed to anything
-        if rec.is_err() {
-            sqlx::query!(
-                r#"
-                UPDATE job_collection
-                SET status = $2
-                WHERE guid = $1 AND status != 'error'
-                "#,
-                job_guid,
-                status
-            )
-            .execute(&mut tx)
-            .await?;
-        }
-
         tx.commit().await.unwrap();
+
+        Self::propagate_status(job_guid, pool).await?;
+
+        ////Propagate status
+        //let rec = sqlx::query!(
+        //    r#"
+        //    SELECT id FROM jobs
+        //    WHERE collection_guid = $1 AND freed != 1
+        //    LIMIT 1
+        //    "#,
+        //    job_guid
+        //)
+        //.fetch_one(&mut tx)
+        //.await;
+
+        ////Status from error cannot be changed to anything
+        //if rec.is_err() {
+        //    sqlx::query!(
+        //        r#"
+        //        UPDATE job_collection
+        //        SET status = $2
+        //        WHERE guid = $1 AND status != 'error'
+        //        "#,
+        //        job_guid,
+        //        status
+        //    )
+        //    .execute(&mut tx)
+        //    .await?;
+        //}
+
+        //tx.commit().await.unwrap();
         Ok(())
     }
 
@@ -425,31 +488,39 @@ impl Job {
         jobs: JobInfoContainerList,
         pool: &SqlitePool,
     ) -> Result<()> {
-        // let mut tx = pool.begin().await?;
-
         let collection_guids = jobs
             .jobs
             .iter()
-            .map(|job| job.job_guid.clone())
-            .collect::<Vec<String>>()
-            .join(",");
+            .map(|job| job.job_guid.as_ref())
+            .collect::<Vec<&str>>();
 
-        let to_complete = sqlx::query!(
+        let query = format!(
             r#"
             SELECT collection_guid
             FROM jobs
-            WHERE status IN ("init", "alive") AND agent_guid == $1 AND collection_guid NOT IN ($2)
+            WHERE status IN ("init", "alive") AND agent_guid == ? AND collection_guid NOT IN ({})
             "#,
-            agent_guid,
-            collection_guids
-        )
-        .fetch_all(pool)
-        .await?;
+            (0..collection_guids.len())
+                .map(|_| "?")
+                .collect::<Vec<&str>>()
+                .join(",")
+        );
+
+        let mut q = sqlx::query(&query);
+        q = q.bind(agent_guid);
+
+        for x in &collection_guids {
+            q = q.bind(x);
+        }
+
+        let to_complete = q.fetch_all(pool).await?;
 
         for collection in to_complete.iter() {
+            let id: String = collection.try_get(0)?;
+            info!("Completing {}", id);
             Self::complete_job(
                 agent_guid,
-                &collection.collection_guid,
+                collection.try_get(0)?,
                 &"unknown".to_string(),
                 "completed",
                 pool,

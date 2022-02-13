@@ -7,6 +7,7 @@ use tonic::transport::Channel;
 use crate::protos::agent::job_client::JobClient;
 use crate::protos::agent::system_info_client::SystemInfoClient;
 use crate::protos::agent::updates_client::UpdatesClient;
+use crate::protos::agent::JobGuid;
 use crate::protos::agent::{update::UpdateKind, Empty, JobCreateRequest, SysInfo};
 
 use crate::models::Agent;
@@ -15,6 +16,7 @@ use crate::models::Job;
 #[derive(Debug)]
 pub enum Request {
     JobCreate { job: JobCreateRequest },
+    JobStop { guid: String },
 }
 
 #[derive(Debug)]
@@ -188,6 +190,22 @@ impl AgentBroker {
         }
     }
 
+    async fn stop_job(&mut self, job_guid: &str) -> Result<(), String> {
+        if let Some(job_client) = &mut self.job_client {
+            let request = tonic::Request::new(JobGuid {
+                guid: job_guid.to_string(),
+            });
+            match job_client.stop(request).await {
+                Ok(_) => {}
+                Err(err) => return Err(format!("failed to stop job: {:?}", err)),
+            }
+        } else {
+            return Err(format!("failed to get job_client for {:?}", self.guid));
+        }
+
+        Ok(())
+    }
+
     pub async fn main(&mut self, broker_messages: &mut Receiver<Request>) -> Result<(), String> {
         self.init().await?;
         self.sync_jobs().await?;
@@ -218,6 +236,14 @@ impl AgentBroker {
                                     }
                                 }
                             },
+                            Request::JobStop { guid } => {
+                                match self.stop_job(&guid).await {
+                                    Ok(_) => {},
+                                    Err(err) => {
+                                        error!("{:?}", err);
+                                    }
+                                }
+                            },
                         },
                         None => break
                     }
@@ -229,18 +255,17 @@ impl AgentBroker {
                                 if let Some(kind) = update.update_kind {
                                     match kind {
                                         UpdateKind::JobMsg(job_update) => {
-                                            self.set_job_last_msg(&job_update.guid, &job_update.last_msg).await;
-                                        },
-                                        UpdateKind::JobErr(job_err) => {
-                                            self.complete_job(&job_err.guid, &job_err.last_msg, "error").await;
-                                        },
-                                        UpdateKind::JobStatus(job_status) => {
-                                            if job_status.status == "completed" {
-                                                self.complete_job(&job_status.guid, &"".to_string(), "completed").await;
-                                            } else {
-                                                self.set_job_status(&job_status.guid, &job_status.status).await;
+                                            if let Some(status) = job_update.status {
+                                                let last_msg = job_update.last_msg.unwrap_or_else(String::new);
+                                                if status == "completed" || status == "error" {
+                                                    self.complete_job(&job_update.guid, &last_msg, &status).await;
+                                                } else {
+                                                    self.set_job_status(&job_update.guid, &status).await;
+                                                }
+                                            } else if let Some(last_msg) = job_update.last_msg {
+                                                self.set_job_last_msg(&job_update.guid, &last_msg).await;
                                             }
-                                        }
+                                        },
                                     }
                                 }
                             },

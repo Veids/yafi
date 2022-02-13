@@ -161,6 +161,25 @@ function confirm_agent_delection(guid){
   });
 }
 
+function job_stop(event, guid) {
+  $.ajax({
+    url: `/api/job/${guid}/stop`,
+    success: function(textStatus) {
+      iziToast.success({
+        title: 'OK',
+        message: 'Job stop request sent!',
+      });
+    },
+    error: function(errMsg) {
+      iziToast.error({
+        title: 'Error',
+        message: errMsg.statusText,
+      });
+    }
+  });
+  event.preventDefault();
+}
+
 function setup_modals(){
   $("#modal-add-agent :submit").click(function(event){
     var modal = $("#modal-add-agent");
@@ -443,6 +462,13 @@ function main(){
         card.find("#ram").text(job.job_collection.ram);
         card.find("#timeout").text(job.job_collection.timeout);
         card.find("#status").text(job.job_collection.status);
+        if (job.job_collection.status == "alive" || job.job_collection.status == "init") {
+          var stop = card.find("#stop");
+          stop.click(function(event){
+            job_stop(event, guid);
+          });
+          stop.show();
+        }
         card.find(".overlay").remove();
 
         var assigned_agents = $("#assigned-agents tbody"); 

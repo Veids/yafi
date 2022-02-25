@@ -521,7 +521,7 @@ impl Job {
             Self::complete_job(
                 agent_guid,
                 collection.try_get(0)?,
-                &"unknown".to_string(),
+                "unknown",
                 "completed",
                 pool,
             )

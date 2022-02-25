@@ -53,22 +53,19 @@ async fn create(
     tx: web::Data<Sender<Event>>,
 ) -> impl Responder {
     let agent_req = agent_req.into_inner();
-    let agent;
-    match agent_req.agent_type.as_ref() {
-        "linux" => {
-            agent = Agent {
-                guid: Uuid::new_v4().to_string(),
-                description: agent_req.description,
-                agent_type: agent_req.agent_type,
-                endpoint: agent_req.endpoint,
-                status: "init".to_string(),
-                ..Default::default()
-            };
-        }
+    let agent = match agent_req.agent_type.as_ref() {
+        "linux" => Agent {
+            guid: Uuid::new_v4().to_string(),
+            description: agent_req.description,
+            agent_type: agent_req.agent_type,
+            endpoint: agent_req.endpoint,
+            status: "init".to_string(),
+            ..Default::default()
+        },
         _ => {
             return HttpResponse::BadRequest().body("Unsupported agent type");
         }
-    }
+    };
 
     match Agent::create(agent, db_pool.get_ref()).await {
         Ok(agent) => {

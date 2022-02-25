@@ -137,14 +137,13 @@ async fn create_job(
         }
     }
 
-    let scheduled_jobs;
-    match Job::schedule_job(&job_info, db_pool.get_ref()).await {
-        Ok(res) => scheduled_jobs = res,
+    let scheduled_jobs = match Job::schedule_job(&job_info, db_pool.get_ref()).await {
+        Ok(res) => res,
         Err(err) => {
             fs::remove_dir_all(&job_tmp_dir)?;
             return Err(actix_web::error::ErrorBadRequest(err));
         }
-    }
+    };
 
     fs::rename(job_tmp_dir, job_nfs_dir)?;
 

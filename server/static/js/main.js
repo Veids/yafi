@@ -256,7 +256,6 @@ function setup_modals(){
       data: fd,
       processData: false,
       contentType: false,
-      // contentType: "multipart/form-data",
       success: function(job, textStatus){
         $(modal).modal("hide");
         iziToast.success({
@@ -359,6 +358,7 @@ function main(){
       }
       return data;
     }
+
     function renderAgentType(data, type) {
       if (type === "display"){
         var icon = "";
@@ -371,6 +371,27 @@ function main(){
             break;
         }
         return `<i class="${icon}"></i> ${data}`;
+      }
+      return data;
+    }
+
+    function renderJobStatus(data, type) {
+      if (type === "display") {
+        var badge = "badge-secondary";
+
+        switch (data){
+          case "init":
+          case "alive":
+            badge = "badge-primary";
+            break;
+          case "completed":
+            badge = "badge-success";
+            break;
+          case "error":
+            badge = "badge-danger";
+            break;
+        }
+        return `<span class="badge ${badge}">${data}</span>`;
       }
       return data;
     }
@@ -419,26 +440,7 @@ function main(){
         { 
           "data": "status",
           "className": "text-center",
-          "render": function(data, type) {
-            if (type === "display") {
-              var badge = "badge-secondary";
-
-              switch (data){
-                case "init":
-                case "up":
-                  badge = "badge-primary";
-                  break;
-                case "completed":
-                  badge = "badge-success";
-                  break;
-                case "error":
-                  badge = "badge-danger";
-                  break;
-              }
-              return `<span class="badge ${badge}">${data}</span>`;
-            }
-            return data;
-          }
+          "render": renderJobStatus
         },
       ],
       "order": [[3, "desc"]]

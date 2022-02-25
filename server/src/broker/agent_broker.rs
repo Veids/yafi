@@ -57,9 +57,7 @@ impl AgentBroker {
                 self.job_client = Some(conn);
             } else {
                 if agent.status == "up" {
-                    Agent::update_status(&self.guid, "down", &self.db_pool)
-                        .await
-                        .unwrap();
+                    self.update_status("down").await;
                 }
                 return Err(format!(
                     "agent.JobClient {} couldn't establish connection",
@@ -71,9 +69,7 @@ impl AgentBroker {
                 self.updates_client = Some(conn);
             } else {
                 if agent.status != "up" {
-                    Agent::update_status(&self.guid, "down", &self.db_pool)
-                        .await
-                        .unwrap();
+                    self.update_status("down").await;
                 }
                 return Err(format!(
                     "agent.UpdatesClient {} couldn't establish connection",
@@ -85,9 +81,7 @@ impl AgentBroker {
                 self.sys_info_client = Some(conn);
             } else {
                 if agent.status != "up" {
-                    Agent::update_status(&self.guid, "down", &self.db_pool)
-                        .await
-                        .unwrap();
+                    self.update_status("down").await;
                 }
                 return Err(format!(
                     "agent.SystemInfoClient {} coudln't establish connection",
@@ -98,11 +92,7 @@ impl AgentBroker {
             if agent.status == "init" {
                 if let Some(sys_info) = self.get_sysinfo().await {
                     match Agent::update_sys_info(&self.guid, &sys_info, &self.db_pool).await {
-                        Ok(_) => {
-                            Agent::update_status(&self.guid, "down", &self.db_pool)
-                                .await
-                                .unwrap();
-                        }
+                        Ok(_) => self.update_status("down").await,
                         Err(err) => return Err(format!("Failed to update sys info: {err}")),
                     }
                 }
@@ -206,21 +196,22 @@ impl AgentBroker {
         Ok(())
     }
 
+    async fn update_status(&self, status: &str) {
+        Agent::update_status(&self.guid, status, &self.db_pool)
+            .await
+            .unwrap();
+    }
+
     pub async fn main(&mut self, broker_messages: &mut Receiver<Request>) -> Result<(), String> {
         self.init().await?;
         self.sync_jobs().await?;
 
-        let mut stream;
-        match &mut self.updates_client {
-            Some(updates_client) => {
-                stream = updates_client.get(Empty {}).await.unwrap().into_inner();
-            }
+        let mut stream = match &mut self.updates_client {
+            Some(updates_client) => updates_client.get(Empty {}).await.unwrap().into_inner(),
             _ => return Err(format!("agent.UpdatesClient {} is not ready", self.guid)),
-        }
+        };
 
-        Agent::update_status(&self.guid, "up", &self.db_pool)
-            .await
-            .unwrap();
+        self.update_status("up").await;
 
         loop {
             tokio::select! {
@@ -256,7 +247,7 @@ impl AgentBroker {
                                     match kind {
                                         UpdateKind::JobMsg(job_update) => {
                                             if let Some(status) = job_update.status {
-                                                let last_msg = job_update.last_msg.unwrap_or_else(String::new);
+                                                let last_msg = job_update.last_msg.unwrap_or_default();
                                                 if status == "completed" || status == "error" {
                                                     self.complete_job(&job_update.guid, &last_msg, &status).await;
                                                 } else {
@@ -270,9 +261,7 @@ impl AgentBroker {
                                 }
                             },
                             Err(err) => {
-                                Agent::update_status(&self.guid, "down", &self.db_pool)
-                                    .await
-                                    .unwrap();
+                                self.update_status("down").await;
                                 return Err(format!(
                                     "agent.UpdatesClient {} throwed an error: {:?}",
                                     self.guid, err
@@ -285,9 +274,7 @@ impl AgentBroker {
             }
         }
 
-        Agent::update_status(&self.guid, "down", &self.db_pool)
-            .await
-            .unwrap();
+        self.update_status("down").await;
 
         Ok(())
     }

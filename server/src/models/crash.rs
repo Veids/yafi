@@ -42,4 +42,18 @@ impl Crash {
         .fetch_all(pool)
         .await?)
     }
+
+    pub async fn get_all_crashes_by_job(job_guid: &str, pool: &SqlitePool) -> Result<Vec<Crash>> {
+        Ok(sqlx::query_as!(
+            Crash,
+            r#"
+            SELECT guid, name, collection_guid, analyzed
+            FROM crashes
+            WHERE collection_guid = $1
+            "#,
+            job_guid
+        )
+        .fetch_all(pool)
+        .await?)
+    }
 }

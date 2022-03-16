@@ -5,7 +5,7 @@ use crate::routes::routes;
 
 use actix_web::{middleware::Logger, web, App, HttpServer};
 use dotenv::dotenv;
-use log::error;
+use log::{info, error};
 use sqlx::SqlitePool;
 use tokio::sync::mpsc::{self, Sender};
 
@@ -35,6 +35,8 @@ pub async fn server() -> std::io::Result<()> {
     let db = db_pool.clone();
     tokio::spawn(async move { broker(db, rx).await });
     add_existing_agents(&tx, &db_pool).await;
+
+    info!("Listening on {}", CONFIG.sap_server_listen);
 
     HttpServer::new(move || {
         App::new()

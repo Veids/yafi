@@ -186,8 +186,8 @@ impl Job {
         let now = chrono::offset::Utc::now().to_string();
         sqlx::query!(
             r#"
-            INSERT INTO job_collection (guid, name, description, creation_date, agent_type, image, cpus, ram, timeout, target, corpus, status)
-            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO job_collection (guid, name, description, creation_date, agent_type, image, cpus, ram, timeout, target, corpus, status, crash_auto_analyze)
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0)
             "#,
             job_info.guid,
             job_info.name,

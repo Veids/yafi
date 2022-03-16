@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 use crate::broker::{Event, Request};
 use crate::config::CONFIG;
 use crate::handlers::agent::JobInfo;
-use crate::models::Job;
+use crate::models::{Job, Crash};
 use crate::utils::notify_processor;
 
 use actix_multipart::{Field, Multipart};
@@ -118,8 +118,8 @@ async fn create_job(
     let data_dir = job_tmp_dir.join("data/");
 
     fs::create_dir_all(&data_dir)?;
-    fs::create_dir_all(job_tmp_dir.join("/res"))?;
-    fs::create_dir_all(job_tmp_dir.join("/crashes"))?;
+    fs::create_dir_all(job_tmp_dir.join("res"))?;
+    fs::create_dir_all(job_tmp_dir.join("crashes"))?;
 
     match process_job_create(&mut payload, &data_dir).await {
         Ok(_job_info) => {
@@ -185,6 +185,17 @@ async fn get_job(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> imp
         Err(err) => {
             error!("Error fetching job: {}", err);
             HttpResponse::InternalServerError().body("Error fetching job")
+        }
+    }
+}
+
+#[get("/job/{guid}/crashes")]
+async fn get_job_crashes(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> impl Responder {
+    match Crash::get_all_crashes_by_job(&guid, db_pool.get_ref()).await {
+        Ok(crashes) => HttpResponse::Ok().json(crashes),
+        Err(err) => {
+            error!("Error fetching job crashes: {}", err);
+            HttpResponse::InternalServerError().body("Error fetching job crashes")
         }
     }
 }

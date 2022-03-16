@@ -81,26 +81,34 @@
             <div class="card-header p-0 border-bottom-0">
               <ul class="nav nav-tabs" role="tablist">
                 <li class="nav-item">
-                  <a class="nav-link active" href="#stats" data-toggle="pill" role="tab" aria-controls="tab-stats">Stats</a>
+                  <a class="nav-link active" href="#stats" data-toggle="tab" role="tab" aria-controls="stats">Stats</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="#coverage" data-toggle="pill" role="tab" aria-controls="tab-coverage">Coverage</a>
+                  <a class="nav-link" href="#coverage" data-toggle="tab" role="tab" aria-controls="coverage">Coverage</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="#crashes" data-toggle="pill" role="tab" aria-controls="tab-crashes">Crashes</a>
+                  <a class="nav-link" href="#crashes" data-toggle="tab" role="tab" aria-controls="crashes">Crashes</a>
                 </li>
               </ul>
             </div>
             <div class="card-body">
               <div class="tab-content">
-                <div class="tab-pane fade active show" role="tabpanel" aria-labelledby="tab-stats">
+                <div class="tab-pane fade active show" id="stats" role="tabpanel" aria-labelledby="tab-stats">
                   Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
                 </div>
-                <div class="tab-pane fade active show" role="tabpanel" aria-labelledby="tab-coverage">
+                <div class="tab-pane fade" id="coverage" role="tabpanel" aria-labelledby="tab-coverage">
                   Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
                 </div>
-                <div class="tab-pane fade active show" role="tabpanel" aria-labelledby="tab-crashes">
-                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+                <div class="tab-pane fade" id="crashes" role="tabpanel" aria-labelledby="tab-crashes">
+                  <table id="crash-table" class="display table table-bordered table-striped dataTable dtr-inline">
+                    <thead>
+                        <tr>
+                            <th>GUID</th>
+                            <th>Name</th>
+                            <th>Analyzed</th>
+                        </tr>
+                    </thead>
+                  </table>
                 </div>
               </div>
             </div>

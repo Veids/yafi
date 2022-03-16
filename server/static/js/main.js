@@ -487,6 +487,60 @@ function main(){
         });
       }
     });
+
+    var t = $("#crash-table").DataTable({
+      "responsive": true,
+      "autoWidth": false,
+      "ajax": {
+        "url": `/api/job/${guid}/crashes`,
+        "dataSrc": ""
+      },
+      "columns": [
+        { "data": "guid" },
+        {
+          "data": "name",
+          "render": $.fn.dataTable.render.text()
+        },
+        {
+         "data": "analyzed",
+          "render": $.fn.dataTable.render.text()
+        },
+      ],
+    });
+
+    $(t.table().container()).on("click", "tbody tr", function(){
+      var row = t.row(this);
+      window.location = "/crash/" + row.data().guid;
+    });
+  } else if (window.location.pathname.match("/crashes$")) {
+    var t = $("#crashes-table").DataTable({
+      "responsive": true,
+      "autoWidth": false,
+      "ajax": {
+        "url": `/api/crashes`,
+        "dataSrc": ""
+      },
+      "columns": [
+        { "data": "guid" },
+        {
+          "data": "collection_guid",
+          "render": $.fn.dataTable.render.text()
+        },
+        {
+          "data": "name",
+          "render": $.fn.dataTable.render.text()
+        },
+        {
+          "data": "analyzed",
+          "render": $.fn.dataTable.render.text()
+        },
+      ],
+    });
+
+    $(t.table().container()).on("click", "tbody tr", function(){
+      var row = t.row(this);
+      window.location = "/crash/" + row.data().guid;
+    });
   }
 }
 

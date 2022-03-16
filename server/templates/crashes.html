@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Jobs{% endblock title %}
+{% block title %}Crashes{% endblock title %}
 {% block header %}{% endblock header %}
 {% block content %}
-{% set current_page = "Jobs" %}
+{% set current_page = "Crashes" %}
 {% include "navbar.html" %}
 {% include "sidebar.html" %}
 <div class="content-wrapper">
@@ -16,18 +16,13 @@
             <h3 class="card-title">Listing</h3>
           </div>
           <div class="card-body">
-            <table id="jobs-table" class="display table table-bordered table-striped dataTable dtr-inline">
+            <table id="crashes-table" class="display table table-bordered table-striped dataTable dtr-inline">
               <thead>
                   <tr>
                       <th>GUID</th>
+                      <th>Job GUID</th>
                       <th>Name</th>
-                      <th>Description</th>
-                      <th>Created</th>
-                      <th>Agent type</th>
-                      <th>CPUs</th>
-                      <th>RAM</th>
-                      <th>Timeout</th>
-                      <th>Status</th>
+                      <th>Analyzed</th>
                   </tr>
               </thead>
             </table>

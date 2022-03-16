@@ -209,10 +209,11 @@ impl JobItem {
                         let target = crashes_out.join(file_name);
                         if !target.exists() {
                             info!("New crash! {:?}", target);
+                            let file_name = file_name.to_string_lossy().into_owned();
                             fs::copy(crash_path, target.clone())?;
                             self.send_update(UpdateKind::CrashMsg(CrashMsg {
                                 job_guid: self.req.job_guid.clone(),
-                                name: target.to_string_lossy().into_owned(),
+                                name: file_name,
                                 analyzed: None,
                             }))
                             .await;

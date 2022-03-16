@@ -48,3 +48,11 @@ async fn job() -> HttpResponse {
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
+
+#[get("/crashes")]
+async fn crashes() -> HttpResponse {
+    match TEMPLATES.render("crashes.html", &tera::Context::new()) {
+        Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}

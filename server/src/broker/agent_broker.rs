@@ -7,10 +7,11 @@ use tonic::transport::Channel;
 use crate::protos::agent::job_client::JobClient;
 use crate::protos::agent::system_info_client::SystemInfoClient;
 use crate::protos::agent::updates_client::UpdatesClient;
-use crate::protos::agent::JobGuid;
 use crate::protos::agent::{update::UpdateKind, Empty, JobCreateRequest, SysInfo};
+use crate::protos::agent::{CrashMsg, JobGuid};
 
 use crate::models::Agent;
+use crate::models::Crash;
 use crate::models::Job;
 
 #[derive(Debug)]
@@ -202,6 +203,15 @@ impl AgentBroker {
             .unwrap();
     }
 
+    async fn new_crash(&self, crash_msg: &CrashMsg) {
+        match Crash::new_crash(crash_msg, &self.db_pool).await {
+            Ok(()) => {}
+            Err(err) => {
+                error!("Failed to process new crash {}", err);
+            }
+        }
+    }
+
     pub async fn main(&mut self, broker_messages: &mut Receiver<Request>) -> Result<(), String> {
         self.init().await?;
         self.sync_jobs().await?;
@@ -257,6 +267,9 @@ impl AgentBroker {
                                                 self.set_job_last_msg(&job_update.guid, &last_msg).await;
                                             }
                                         },
+                                        UpdateKind::CrashMsg(crash_msg) => {
+                                            self.new_crash(&crash_msg).await;
+                                        }
                                     }
                                 }
                             },

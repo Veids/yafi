@@ -1,26 +1,35 @@
-use std::path::Path;
-use std::sync::Arc;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use crate::config::CONFIG;
 use crate::jobs::Jobs;
+use crate::protos::agent::CrashMsg;
 use bollard::{
     container::{Config, CreateContainerOptions, LogsOptions, WaitContainerOptions},
     errors::Error as BollardError,
     image::CreateImageOptions,
-    models::HostConfig,
+    models::{ContainerWaitResponse, HostConfig},
     Docker,
 };
-use futures::StreamExt;
-use log::info;
-use tokio::sync::mpsc::Sender;
-use tokio::sync::RwLock;
-use tokio::task;
+use futures::stream;
+use futures_core::Stream;
+use log::{error, info};
+use tokio::{
+    sync::{mpsc::Sender, RwLock},
+    task, time,
+};
+use tokio_stream::StreamExt;
 use tonic::{Request, Response, Status};
 
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
-    update::UpdateKind, Empty, JobCreateRequest, JobGuid, JobInfoContainerList, JobMsg, JobsList,
-    Update,
+    update::UpdateKind, CrashAnalyzeRequest, Empty, JobCreateRequest, JobGuid,
+    JobInfoContainerList, JobMsg, JobsList, Update,
 };
 
 #[derive(Debug)]
@@ -46,6 +55,7 @@ struct JobItem {
     jobs: Arc<Jobs>,
     updates: Arc<RwLock<Option<Sender<Update>>>>,
     id: Option<String>,
+    job_dir: PathBuf,
 }
 
 impl JobItem {
@@ -55,12 +65,15 @@ impl JobItem {
         jobs: Arc<Jobs>,
         updates: Arc<RwLock<Option<Sender<Update>>>>,
     ) -> JobItem {
+        let job_dir = Path::new(&CONFIG.nfs_dir).join("jobs").join(&req.job_guid);
+
         JobItem {
             req,
             docker,
             jobs,
             updates,
             id: None,
+            job_dir,
         }
     }
 
@@ -99,12 +112,9 @@ impl JobItem {
     }
 
     async fn create_container(&mut self) -> Result<(), BollardError> {
-        let job_dir = Path::new(&CONFIG.nfs_dir)
-            .join("jobs")
-            .join(&self.req.job_guid);
         let mount = vec![format!(
             "{}:/work",
-            job_dir.into_os_string().into_string().unwrap()
+            self.job_dir.to_string_lossy().into_owned()
         )];
         let config = Config {
             image: Some(self.req.image.clone()),
@@ -146,6 +156,75 @@ impl JobItem {
         Ok(res)
     }
 
+    async fn handle_response(&self, response: ContainerWaitResponse) -> Result<(), BollardError> {
+        if response.status_code == 0 {
+            self.send_update(UpdateKind::JobMsg(JobMsg {
+                guid: self.req.job_guid.clone(),
+                status: Some("completed".to_string()),
+                last_msg: None,
+            }))
+            .await;
+            self.jobs.set_status(&self.req.job_guid, "completed");
+        } else {
+            let mut log_stream = self.docker.logs::<String>(
+                self.id.as_ref().unwrap(),
+                Some(LogsOptions {
+                    stderr: true,
+                    ..Default::default()
+                }),
+            );
+
+            let mut log = String::new();
+
+            while let Some(output) = log_stream.next().await {
+                let output = output?;
+                log += std::str::from_utf8(&output.into_bytes()).unwrap();
+            }
+
+            self.send_update(UpdateKind::JobMsg(JobMsg {
+                guid: self.req.job_guid.clone(),
+                status: Some("error".to_string()),
+                last_msg: Some(log),
+            }))
+            .await;
+            self.jobs.set_status(&self.req.job_guid, "error");
+        }
+        Ok(())
+    }
+
+    async fn sync_crashes(&self) -> Result<(), BollardError> {
+        let res_path = self.job_dir.join("res");
+        let crashes_out = self.job_dir.join("crashes");
+
+        for entry in fs::read_dir(res_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                let crashes_src = path.join("crashes");
+                if let Ok(crashes) = fs::read_dir(crashes_src) {
+                    for crash in crashes {
+                        let crash = crash?;
+                        let crash_path = crash.path();
+                        let file_name = crash_path.file_name().unwrap_or_default();
+                        let target = crashes_out.join(file_name);
+                        if !target.exists() {
+                            info!("New crash! {:?}", target);
+                            fs::copy(crash_path, target.clone())?;
+                            self.send_update(UpdateKind::CrashMsg(CrashMsg {
+                                job_guid: self.req.job_guid.clone(),
+                                name: target.to_string_lossy().into_owned(),
+                                analyzed: None,
+                            }))
+                            .await;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn wait_container(&self) -> Result<(), BollardError> {
         let mut stream = self.docker.wait_container(
             self.id.as_ref().unwrap(),
@@ -154,43 +233,33 @@ impl JobItem {
             }),
         );
 
-        while let Some(response) = stream.next().await {
-            let response = response?;
-            info!("Container exited: {:?}", response);
+        let mut sync_stream: Pin<Box<dyn Stream<Item = ()> + Send>> = if self.req.idx == 0 {
+            let interval = time::interval(Duration::from_secs(60 * 5));
+            Box::pin(stream::unfold(interval, |mut interval| async {
+                interval.tick().await;
+                Some(((), interval))
+            }))
+        } else {
+            Box::pin(stream::empty())
+        };
 
-            if response.status_code == 0 {
-                self.send_update(UpdateKind::JobMsg(JobMsg {
-                    guid: self.req.job_guid.clone(),
-                    status: Some("completed".to_string()),
-                    last_msg: None,
-                }))
-                .await;
-                self.jobs.set_status(&self.req.job_guid, "completed");
-            } else {
-                let mut log_stream = self.docker.logs::<String>(
-                    self.id.as_ref().unwrap(),
-                    Some(LogsOptions {
-                        stderr: true,
-                        ..Default::default()
-                    }),
-                );
+        loop {
+            tokio::select! {
+                Some(response) = stream.next() => {
+                    let response = response?;
+                    info!("Container exited: {:?}", response);
 
-                let mut log = String::new();
-
-                while let Some(output) = log_stream.next().await {
-                    let output = output?;
-                    log += std::str::from_utf8(&output.into_bytes()).unwrap();
-                }
-
-                self.send_update(UpdateKind::JobMsg(JobMsg {
-                    guid: self.req.job_guid.clone(),
-                    status: Some("error".to_string()),
-                    last_msg: Some(log),
-                }))
-                .await;
-                self.jobs.set_status(&self.req.job_guid, "error");
+                    self.handle_response(response).await?;
+                    break;
+                },
+                Some(_) = sync_stream.next() => {
+                    self.sync_crashes().await?;
+                },
+                else => break
             }
         }
+
+        self.sync_crashes().await?;
 
         Ok(())
     }
@@ -216,12 +285,14 @@ impl JobItem {
         match self.handle().await {
             Ok(_) => {}
             Err(err) => {
+                error!("{}", err);
                 self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
                     status: Some("error".to_string()),
                     last_msg: Some(err.to_string()),
                 }))
                 .await;
+                self.jobs.set_status(&self.req.job_guid, "error");
             }
         }
     }
@@ -291,5 +362,12 @@ impl Job for JobHandler {
             return Err(Status::invalid_argument("Job has been finished"));
         }
         Err(Status::invalid_argument("Job not found"))
+    }
+
+    async fn analyze_crash(
+        &self,
+        request: Request<CrashAnalyzeRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        Ok(Response::new(Empty {}))
     }
 }

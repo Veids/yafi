@@ -15,6 +15,7 @@ pub struct JobCollection {
     pub description: String,
     pub agent_type: String,
     pub creation_date: String,
+    pub image: String,
     pub cpus: u64,
     pub ram: u64,
     pub timeout: String,
@@ -73,7 +74,7 @@ impl Job {
     pub async fn get_all_collections(pool: &SqlitePool) -> Result<Vec<JobCollection>> {
         let job_collection = sqlx::query!(
             r#"
-              SELECT guid, name, description, creation_date, agent_type, cpus, ram, timeout, target, corpus, status
+              SELECT guid, name, description, creation_date, agent_type, image, cpus, ram, timeout, target, corpus, status
               FROM job_collection
             "#
         )
@@ -86,6 +87,7 @@ impl Job {
             description: rec.description,
             creation_date: rec.creation_date,
             agent_type: rec.agent_type,
+            image: rec.image,
             cpus: rec.cpus.unwrap() as u64,
             ram: rec.ram.unwrap() as u64,
             timeout: rec.timeout,
@@ -138,6 +140,7 @@ impl Job {
                     corpus: job_info.corpus.clone(),
                     last_msg: "".to_string(),
                     status: "init".to_string(),
+                    crash_auto_analyze: false,
                 },
             });
             rest_cpus -= std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64);
@@ -183,14 +186,15 @@ impl Job {
         let now = chrono::offset::Utc::now().to_string();
         sqlx::query!(
             r#"
-            INSERT INTO job_collection (guid, name, description, creation_date, agent_type, cpus, ram, timeout, target, corpus, status)
-            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO job_collection (guid, name, description, creation_date, agent_type, image, cpus, ram, timeout, target, corpus, status)
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
             job_info.guid,
             job_info.name,
             job_info.description,
             now,
             job_info.agent_type,
+            job_info.image,
             cpus,
             ram,
             job_info.timeout,
@@ -209,7 +213,7 @@ impl Job {
         let rec = sqlx::query!(
             r#"
             SELECT status, COUNT(*) as count
-            FROM job_collection 
+            FROM job_collection
             GROUP BY status
             "#
         )
@@ -242,7 +246,7 @@ impl Job {
     pub async fn get_job(guid: &str, pool: &SqlitePool) -> Result<JobInfoResponse> {
         let rec = sqlx::query!(
             "
-            SELECT guid, name, description, creation_date, agent_type, cpus, ram, timeout, target, corpus, status
+            SELECT guid, name, description, creation_date, agent_type, image, cpus, ram, timeout, target, corpus, status
             FROM job_collection
             WHERE guid = $1
             ",
@@ -257,6 +261,7 @@ impl Job {
             description: rec.description,
             creation_date: rec.creation_date,
             agent_type: rec.agent_type,
+            image: rec.image,
             cpus: rec.cpus.unwrap() as u64,
             ram: rec.ram.unwrap() as u64,
             timeout: rec.timeout,

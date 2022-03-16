@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-web = "4.0.0-rc.3"
-actix-http = "3.0.0-rc.4"
-actix-files = "0.6.0-beta.16"
-actix-multipart = "0.4.0-beta.13"
+actix-web = "4.0"
+actix-http = "3.0"
+actix-files = "0.6"
+actix-multipart = "0.4"
 sqlx = { version = "0.5", features = [ "runtime-actix-rustls", "sqlite" ] }
 tonic = "0.6"
 prost = "0.9"

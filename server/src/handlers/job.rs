@@ -116,7 +116,10 @@ async fn create_job(
     let job_tmp_dir = Path::new(&CONFIG.tmp_dir).join(&guid);
     let job_nfs_dir = Path::new(&CONFIG.nfs_dir).join("jobs").join(&guid);
     let data_dir = job_tmp_dir.join("data/");
+
     fs::create_dir_all(&data_dir)?;
+    fs::create_dir_all(job_tmp_dir.join("/res"))?;
+    fs::create_dir_all(job_tmp_dir.join("/crashes"))?;
 
     match process_job_create(&mut payload, &data_dir).await {
         Ok(_job_info) => {
@@ -153,7 +156,7 @@ async fn create_job(
             &tx,
             Event::AgentRequest {
                 guid: job.agent_guid,
-                request: Request::JobCreate { job: job.request },
+                request: Box::new(Request::JobCreate { job: job.request }),
             },
         )
         .await;
@@ -213,7 +216,7 @@ async fn stop_job(
                     &tx,
                     Event::AgentRequest {
                         guid: agent_guid,
-                        request: Request::JobStop { guid: guid.clone() },
+                        request: Box::new(Request::JobStop { guid: guid.clone() }),
                     },
                 )
                 .await;

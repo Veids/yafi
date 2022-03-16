@@ -17,4 +17,5 @@ COPY ./schedule.sh /scripts
 COPY ./schedule.py /scripts
 
 RUN chmod +x /scripts/*
+# CMD ["/scripts/schedule.sh"]
 CMD ["python", "/scripts/schedule.py"]

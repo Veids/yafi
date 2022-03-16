@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Passed environment variables:
 # - ID: id to prepend to fuzzer names
-# - MASTER: is our fuzzer is master
 # - RAM
 # - CPUS
 # - TIMEOUT
@@ -28,7 +27,7 @@ class AFLInstance():
         self.env = dict(config["ENV"].items())
         self.fuzz_dir = fuzz_dir
         self.cmd = "afl-fuzz -i in -o out -Q {} -- {}/target".format(
-            "-M master" if self.master else "-S slave".format(id),
+            "-M master_{}".format(id) if self.master else "-S slave_{}".format(id),
             fuzz_dir
         )
 
@@ -82,11 +81,10 @@ class Broker:
 
     async def schedule_fuzzers(self):
         self.instances = []
-        master = True if self.id == "0" else False
-        if master:
-            x = AFLInstance(self.config, self.fuzz_dir, master = True)
-            await x.start()
-            self.instances.append(x)
+
+        x = AFLInstance(self.config, self.fuzz_dir, self.id, master = True)
+        await x.start()
+        self.instances.append(x)
 
         for x in range(1, self.cpus):
             instance = AFLInstance(self.config, self.fuzz_dir, self.id + str(x))
@@ -123,10 +121,12 @@ class Broker:
                 break
 
     async def sync_corpus(self):
-        src = self.fuzz_dir + "/out/"
+        out_dir = self.fuzz_dir + "/out/"
+        src = out_dir + "master_{}".format(self.id)
         dst = "/work/res/"
-        await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", src, dst)).wait()
-        await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", dst, src)).wait()
+        await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", "--chown=1000:1000", "--exclude=README.txt", src, dst)).wait()
+        await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", "--exclude=master_{}".format(self.id), dst, out_dir)).wait()
+        logging.info(f"Sync done")
 
     async def watch_fuzzers(self):
         await self.wait_for_fuzzer_exit()

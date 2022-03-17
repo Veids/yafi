@@ -1,0 +1,28 @@
+{
+  "name": "server",
+  "version": "0.0.1",
+  "main": "index.js",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@babel/core": "^7.17.7",
+    "babel-core": "^6.26.3",
+    "babel-loader": "^8.2.3",
+    "css-loader": "^6.7.1",
+    "mini-css-extract-plugin": "^2.6.0",
+    "style-loader": "^3.3.1",
+    "webpack": "^5.70.0",
+    "webpack-cli": "^4.9.2"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "5",
+    "admin-lte": "^3.2.0",
+    "datatables.net-bs4": "^1.11.5",
+    "datatables.net-responsive-bs4": "^2.2.9",
+    "dompurify": "^2.3.6",
+    "izitoast": "^1.4.0",
+    "jquery": "^3.6.0"
+  },
+  "scripts": {
+    "build": "webpack --mode production"
+  }
+}

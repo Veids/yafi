@@ -1,4 +1,21 @@
-function formatBytes(a,b=2,k=1024){with(Math){let d=floor(log(a)/log(k));return 0==a?"0 Bytes":parseFloat((a/pow(k,d)).toFixed(max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}}
+import '@fortawesome/fontawesome-free/css/all.min.css'
+import 'izitoast/dist/css/iziToast.min.css'
+import 'admin-lte/dist/css/adminlte.min.css'
+import 'datatables.net-bs4/css/dataTables.bootstrap4.min.css'
+import '/assets/css/main.css'
+
+import $ from 'jquery';
+window.jQuery = $;
+window.$ = $;
+
+import 'bootstrap';
+import 'admin-lte';
+import 'izitoast';
+import 'datatables.net-bs4';
+import 'datatables.net-responsive-bs4';
+import 'dompurify';
+
+function formatBytes(a,b=2,k=1024){let d=Math.floor(Math.log(a)/Math.log(k));return 0==a?"0 Bytes":parseFloat((a/Math.pow(k,d)).toFixed(Math.max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}
 
 function sanitize(text){
   return DOMPurify.sanitize(text);

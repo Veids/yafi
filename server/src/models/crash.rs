@@ -6,6 +6,11 @@ use sqlx::{FromRow, SqlitePool};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, FromRow, Default)]
+pub struct CrashStats {
+    pub total: u64
+}
+
+#[derive(Serialize, Deserialize, FromRow, Default)]
 pub struct Crash {
     pub guid: String,
     pub name: String,
@@ -55,5 +60,20 @@ impl Crash {
         )
         .fetch_all(pool)
         .await?)
+    }
+
+    pub async fn get_crash_stats(pool: &SqlitePool) -> Result<CrashStats> {
+        let rec = sqlx::query!(
+            r#"
+            SELECT COUNT(*) as total
+            FROM crashes
+            "#
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(CrashStats{
+            total: rec.total as u64
+        })
     }
 }

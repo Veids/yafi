@@ -18,7 +18,7 @@
             </div>
             <div class="card-body box-profile">
               <div class="text-center">
-                <img class="profile-user-img img-fluid img-circle" src="https://upload.wikimedia.org/wikipedia/commons/f/fc/Eucalyp-Deus_Linux.png" alt="job-info-type">
+                <img class="profile-user-img img-fluid img-circle" src="/static/images/linux.svg" alt="job-info-type">
               </div>
               <h3 id="name" class="profile-username text-center">Job name</h3>
               <p id="description" class="text-muted text-center">Job description</p>
@@ -123,3 +123,6 @@
   <!-- /.content -->
 </div>
 {% endblock content %}
+{% block scripts %}
+<script src="/static/dist/job_page.js"></script>
+{% endblock scripts %}

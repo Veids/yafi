@@ -3,7 +3,14 @@ var node_dir = __dirname + '/node_modules';
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 module.exports = {
-  entry: './assets/js/main.js',
+  entry: {
+    main: './assets/js/main.js',
+    index: './assets/js/index.js',
+    agents: './assets/js/agents.js',
+    jobs: './assets/js/jobs.js',
+    job_page: './assets/js/job_page.js',
+    crashes: './assets/js/crashes.js'
+  },
   plugins: [
     new webpack.ProvidePlugin({
       $: "jquery",
@@ -12,12 +19,12 @@ module.exports = {
       DOMPurify: 'dompurify'
     }),
     new MiniCssExtractPlugin({
-      filename: "bundle.css"
+      filename: "[name].css"
     })
   ],
   output: {
     path: __dirname + '/static/dist',
-    filename: 'bundle.js'
+    filename: '[name].js',
   },
   module: {
     rules: [
@@ -35,5 +42,8 @@ module.exports = {
         type: 'asset/resource'
       }
     ],
+  },
+  optimization: {
+    runtimeChunk: 'single'
   },
 }

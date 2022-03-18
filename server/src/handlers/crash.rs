@@ -14,3 +14,14 @@ async fn get_crashes(db_pool: web::Data<SqlitePool>) -> impl Responder {
         }
     }
 }
+
+#[get("/crash")]
+async fn get_crash_stats(db_pool: web::Data<SqlitePool>) -> impl Responder {
+    match Crash::get_crash_stats(db_pool.get_ref()).await {
+        Ok(stats) => HttpResponse::Ok().json(stats),
+        Err(err) => {
+            error!("Error fetching crash stats: {}", err);
+            HttpResponse::InternalServerError().body("Error fetching crash stats")
+        }
+    }
+}

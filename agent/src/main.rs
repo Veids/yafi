@@ -5,6 +5,7 @@ use dotenv::dotenv;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tonic::transport::Server;
+use log::info;
 
 mod config;
 use crate::config::CONFIG;
@@ -38,6 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let job_handler = JobHandler::new(tx.clone(), docker);
     let system_info_handler = SystemInfoHandler::new();
     let updates_handler = UpdatesHandler::new(tx.clone());
+
+    info!("Listening on {}", CONFIG.sap_agent_listen);
 
     Server::builder()
         .add_service(JobServer::new(job_handler))

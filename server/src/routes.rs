@@ -1,6 +1,6 @@
 use crate::handlers::{
     agent::{create, delete, get_all, get_by_guid},
-    crash::get_crashes,
+    crash::{get_crashes, get_crash_stats},
     job::{create_job, get_job, get_job_stats, get_jobs, stop_job, get_job_crashes},
     web::{agents, index, job, jobs, crashes},
 };
@@ -26,7 +26,8 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
                 .service(stop_job)
                 .service(get_job_crashes)
                 // CRASH routes
-                .service(get_crashes),
+                .service(get_crashes)
+                .service(get_crash_stats)
         )
         // WEB routes
         .service(index)

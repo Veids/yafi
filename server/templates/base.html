@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <title>{% block title %}{% endblock title %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="/static/dist/bundle.css">
+    <link rel="stylesheet" type="text/css" href="/static/dist/main.css">
     {% block head %}{% endblock head %}
 </head>
 
@@ -17,5 +17,7 @@
     {% include "footer.html" %}
     </footer>
 
-    <script src="/static/dist/bundle.js"></script>
+    <script src="/static/dist/runtime.js"></script>
+    <script src="/static/dist/main.js"></script>
+    {% block scripts %}{% endblock scripts %}
 </body>

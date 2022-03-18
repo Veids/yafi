@@ -115,6 +115,27 @@
           </div>
           <!-- ./small card -->
         </div>
+
+        <div class="col-lg-2 col-6">
+          <!-- small card -->
+          <div class="small-box bg-info" id="crashes_total">
+            <div class="overlay">
+              <i class="fas fa-3x fa-sync-alt fa-spin"></i>
+            </div>
+            <div class="inner">
+              <h3>150</h3>
+
+              <p>Crashes Total</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-bullseye"></i>
+            </div>
+            <a href="/crashes" class="small-box-footer">
+              More info <i class="fas fa-arrow-circle-right"></i>
+            </a>
+          </div>
+          <!-- ./small card -->
+        </div>
       </div>
     </div>
     {% include "modals.html" %}
@@ -122,3 +143,6 @@
   <!-- /.content -->
 </div>
 {% endblock content %}
+{% block scripts %}
+<script src="/static/dist/index.js"></script>
+{% endblock scripts %}

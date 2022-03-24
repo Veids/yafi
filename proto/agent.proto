@@ -74,5 +74,5 @@ message JobInfoContainerList {
 message CrashAnalyzeRequest {
     string job_guid = 1;
     string crash_guid = 2;
-    string path = 3;
+    string name = 3;
 }

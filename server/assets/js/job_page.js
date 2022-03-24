@@ -1,7 +1,3 @@
-import $ from 'jquery';
-window.jQuery = $;
-window.$ = $;
-
 import 'datatables.net-bs4';
 import 'datatables.net-responsive-bs4';
 

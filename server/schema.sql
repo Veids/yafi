@@ -42,5 +42,8 @@ CREATE TABLE IF NOT EXISTS crashes (
     guid        TEXT PRIMARY KEY NOT NULL,
     name        TEXT NOT NULL,
     collection_guid TEXT NOT NULL,
-    analyzed    TEXT
+    analyzed    TEXT,
+    hash        TEXT NOT NULL,
+    creation_date TEXT NOT NULL,
+    size        INTEGER NOT NULL CHECK (size > 0)
 );

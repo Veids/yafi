@@ -12,6 +12,9 @@ import 'bootstrap';
 import 'admin-lte';
 import 'izitoast';
 
+function formatBytes(a,b=2,k=1024){let d=Math.floor(Math.log(a)/Math.log(k));return 0==a?"0 Bytes":parseFloat((a/Math.pow(k,d)).toFixed(Math.max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}
+window.formatBytes = formatBytes;
+
 function setup_modals(){
   $("#modal-add-agent :submit").click(function(event){
     var modal = $("#modal-add-agent");

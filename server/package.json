@@ -14,8 +14,10 @@
     "webpack-cli": "^4.9.2"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "5",
+    "@fortawesome/fontawesome-free": "^6",
+    "@gct256/hexdump": "^0.1.2",
     "admin-lte": "^3.2.0",
+    "buffer": "^6.0.3",
     "datatables.net-bs4": "^1.11.5",
     "datatables.net-responsive-bs4": "^2.2.9",
     "dompurify": "^2.3.6",
@@ -23,6 +25,10 @@
     "jquery": "^3.6.0"
   },
   "scripts": {
+    "build-dev": "webpack --mode development",
     "build": "webpack --mode production"
+  },
+  "resolutions": {
+    "es5-ext": "0.10.50"
   }
 }

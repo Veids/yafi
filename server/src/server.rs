@@ -5,7 +5,7 @@ use crate::routes::routes;
 
 use actix_web::{middleware::Logger, web, App, HttpServer};
 use dotenv::dotenv;
-use log::{info, error};
+use log::{error, info};
 use sqlx::SqlitePool;
 use tokio::sync::mpsc::{self, Sender};
 

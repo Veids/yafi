@@ -1,8 +1,8 @@
 use crate::handlers::{
     agent::{create, delete, get_all, get_by_guid},
-    crash::{get_crashes, get_crash_stats},
-    job::{create_job, get_job, get_job_stats, get_jobs, stop_job, get_job_crashes},
-    web::{agents, index, job, jobs, crashes},
+    crash::{get_crash, get_crash_info, get_crash_stats, get_crashes},
+    job::{create_job, get_job, get_job_crashes, get_job_stats, get_jobs, stop_job},
+    web::{agents, crash, crashes, index, job, jobs},
 };
 
 use actix_files::Files;
@@ -28,6 +28,8 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
                 // CRASH routes
                 .service(get_crashes)
                 .service(get_crash_stats)
+                .service(get_crash_info)
+                .service(get_crash),
         )
         // WEB routes
         .service(index)
@@ -35,6 +37,7 @@ pub fn routes(cfg: &mut web::ServiceConfig) {
         .service(jobs)
         .service(job)
         .service(crashes)
+        .service(crash)
         .service(
             Files::new("/static", "./static/")
                 .prefer_utf8(true)

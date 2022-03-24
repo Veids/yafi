@@ -1,7 +1,3 @@
-import $ from 'jquery';
-window.jQuery = $;
-window.$ = $;
-
 async function init_agent_stats(){
   const response = await fetch("/api/agents");
   const agents = await response.json();

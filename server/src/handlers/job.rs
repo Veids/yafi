@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 use crate::broker::{Event, Request};
 use crate::config::CONFIG;
 use crate::handlers::agent::JobInfo;
-use crate::models::{Job, Crash};
+use crate::models::{Crash, Job};
 use crate::utils::notify_processor;
 
 use actix_multipart::{Field, Multipart};
@@ -190,7 +190,10 @@ async fn get_job(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> imp
 }
 
 #[get("/job/{guid}/crashes")]
-async fn get_job_crashes(guid: web::Path<String>, db_pool: web::Data<SqlitePool>) -> impl Responder {
+async fn get_job_crashes(
+    guid: web::Path<String>,
+    db_pool: web::Data<SqlitePool>,
+) -> impl Responder {
     match Crash::get_all_crashes_by_job(&guid, db_pool.get_ref()).await {
         Ok(crashes) => HttpResponse::Ok().json(crashes),
         Err(err) => {

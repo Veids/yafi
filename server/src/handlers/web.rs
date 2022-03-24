@@ -56,3 +56,11 @@ async fn crashes() -> HttpResponse {
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
+
+#[get("/crash/{guid}")]
+async fn crash() -> HttpResponse {
+    match TEMPLATES.render("crash_page.html", &tera::Context::new()) {
+        Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}

@@ -1,7 +1,3 @@
-import $ from 'jquery';
-window.jQuery = $;
-window.$ = $;
-
 import 'izitoast';
 import 'dompurify';
 
@@ -16,8 +12,6 @@ function get_agent_icon(agent_type){
     default: return '<i class="fas fa-question"></i>';
   }
 }
-
-function formatBytes(a,b=2,k=1024){let d=Math.floor(Math.log(a)/Math.log(k));return 0==a?"0 Bytes":parseFloat((a/Math.pow(k,d)).toFixed(Math.max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}
 
 function build_agent_box(agent){
   return `
@@ -43,7 +37,7 @@ function build_agent_box(agent){
                     <span class="agent-badge float-right">${agent.guid}</span>
                   </li>
                   <li class="nav-item p-2">
-                    <i class="far fa-question-circle p-2 align-middle"></i> Last status                    
+                    <i class="far fa-question-circle p-2 align-middle"></i> Last status
                     <span class="agent-badge float-right">Image pulling</span>
                   </li>
                   <li class="nav-item p-2">
@@ -60,7 +54,7 @@ function build_agent_box(agent){
                   </li>
                 </ul>
               </div>
-        
+
               <!-- /.card-body -->
             </div>
             <!-- /.card -->
@@ -148,5 +142,5 @@ async function main(){
 }
 
 (async() => {
-  await main()  
+  await main()
 })();

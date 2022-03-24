@@ -9,7 +9,8 @@ module.exports = {
     agents: './assets/js/agents.js',
     jobs: './assets/js/jobs.js',
     job_page: './assets/js/job_page.js',
-    crashes: './assets/js/crashes.js'
+    crashes: './assets/js/crashes.js',
+    crash_page: './assets/js/crash_page.js'
   },
   plugins: [
     new webpack.ProvidePlugin({

@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use bollard::Docker;
 use dotenv::dotenv;
+use log::info;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tonic::transport::Server;
-use log::info;
 
 mod config;
 use crate::config::CONFIG;

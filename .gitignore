@@ -4,3 +4,7 @@ Cargo.lock
 server.db*
 node_modules
 dist
+*_pb2.py
+*_grpc.py
+env
+__pycache__

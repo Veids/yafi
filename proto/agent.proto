@@ -10,7 +10,7 @@ service Job {
     rpc get_all (Empty) returns (JobInfoContainerList);
     rpc stop (JobGUID) returns (Empty);
 
-    rpc analyze_crash (CrashAnalyzeRequest) returns (Empty);
+    rpc analyze_crash (AnalyzeRequest) returns (AnalyzeResponse);
 }
 
 service SystemInfo {
@@ -59,6 +59,7 @@ message JobMsg {
     string guid = 1;
     optional string status = 2;
     optional string last_msg = 3;
+    optional string log = 4;
 }
 
 message CrashMsg {
@@ -71,8 +72,12 @@ message JobInfoContainerList {
     repeated JobCreateRequest jobs = 1;
 }
 
-message CrashAnalyzeRequest {
+message AnalyzeRequest {
     string job_guid = 1;
     string crash_guid = 2;
     string name = 3;
+}
+
+message AnalyzeResponse {
+    string result = 1;
 }

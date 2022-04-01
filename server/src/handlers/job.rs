@@ -64,7 +64,10 @@ async fn process_job_create(payload: &mut Multipart, job_dir: &Path) -> Result<J
                     }
                     "timeout" => {
                         job_info.timeout = std::str::from_utf8(&chunk).unwrap().to_string();
-                    }
+                    },
+                    "crash-auto-analyze" => {
+                        job_info.crash_auto_analyze = std::str::from_utf8(&chunk).unwrap().parse::<bool>().unwrap();
+                    },
                     _ => {}
                 }
             }

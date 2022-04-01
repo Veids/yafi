@@ -20,6 +20,7 @@ pub struct JobInfo {
     pub timeout: String,
     pub target: String,
     pub corpus: String,
+    pub crash_auto_analyze: bool,
 }
 
 #[get("/agents")]

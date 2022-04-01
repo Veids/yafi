@@ -60,31 +60,34 @@ function main(){
         "render": $.fn.dataTable.render.text()
       },
       {
-       "data": "description",
+        "data": "description",
         "render": $.fn.dataTable.render.text()
       },
-      { "data": "creation_date" },
-      { 
+      {
+        "data": "creation_date",
+        "render": renderDate
+      },
+      {
         "data": "agent_type",
         "className": "text-center",
         "render": renderAgentType
       },
-      { 
+      {
         "data": "cpus",
         "className": "text-center",
         "render": renderBadge
       },
-      { 
+      {
         "data": "ram",
         "className": "text-center",
         "render": renderBadge
       },
-      { 
+      {
         "data": "timeout",
         "className": "text-center",
         "render": $.fn.dataTable.render.text()
       },
-      { 
+      {
         "data": "status",
         "className": "text-center",
         "render": renderJobStatus

@@ -81,7 +81,7 @@
               </div>
             </div>
           </div>
-          <div class="form-group docker-image">
+          <div class="form-group">
             <label for="timeout">Timeout</label>
             <input type="text" class="form-control" id="timeout" placeholder="12h">
           </div>
@@ -100,6 +100,24 @@
               <div class="custom-file">
                 <input type="file" class="custom-file-input" id="upload-corpus">
                 <label class="custom-file-label" for="upload-corpus">Choose file</label>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-6">
+              <div class="form-group">
+                <div class="custom-control custom-switch">
+                  <input type="checkbox" class="custom-control-input" id="crash-auto-analyze" checked>
+                  <label class="custom-control-label" for="crash-auto-analyze">Crash auto analyze</label>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-group">
+                <div class="custom-control custom-switch">
+                  <input type="checkbox" class="custom-control-input" id="trim-corpus">
+                  <label class="custom-control-label" for="trim-corpus">Trim corpus on exit</label>
+                </div>
               </div>
             </div>
           </div>

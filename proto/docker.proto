@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package docker;
+
+service Process {
+    rpc AnalyzeCrash (CrashAnalyzeRequest) returns (CrashAnalyzeResponse) {}
+}
+
+message CrashAnalyzeRequest {
+    string name = 1;
+}
+
+message CrashAnalyzeResponse {
+    string result = 1;
+}

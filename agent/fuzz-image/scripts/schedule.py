@@ -10,6 +10,8 @@ from pathlib import Path
 from zipfile import ZipFile
 from configparser import ConfigParser, ExtendedInterpolation, BasicInterpolation
 from subprocess import Popen, run, DEVNULL
+from grpclib.server import Server, Stream
+
 import os
 import signal
 import asyncio
@@ -17,7 +19,8 @@ import shutil
 import logging
 import sys
 
-# logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+from grpc_handler import Processor
+
 logging.getLogger().setLevel(logging.INFO)
 
 class AFLInstance():
@@ -44,32 +47,34 @@ class AFLInstance():
 class Broker:
     def __init__(self):
         self.parse_env()
-        Path(self.fuzz_dir).mkdir(parents = True, exist_ok = True)
+        Path(self.env["fuzz_dir"]).mkdir(parents = True, exist_ok = True)
         self.extract_files("/work/data/target.zip")
         self.extract_files("/work/data/corpus.zip")
         self.parse_config()
         self.rc = 0
 
     def parse_env(self):
-        self.id = os.environ.get("ID")
-        self.cpus = int(os.environ.get("CPUS"))
-        self.ram = os.environ.get("RAM")
-        self.fuzz_dir = os.environ.get("FUZZ_DIR")
+        self.env = {
+            "id": os.environ.get("ID"),
+            "cpus": int(os.environ.get("CPUS")),
+            "ram": os.environ.get("RAM"),
+            "fuzz_dir": os.environ.get("FUZZ_DIR"),
+        }
 
-        if self.id is None:
+        if self.env["id"] is None:
             logging.error("No ID specified")
             exit(1)
 
-        if self.fuzz_dir is None:
+        if self.env["fuzz_dir"] is None:
             logging.error("No FUZZ_DIR specified")
             exit(1)
 
-        if self.cpus is None:
+        if self.env["cpus"] is None:
             logging.error("No CPUS specified")
             exit(1)
 
     def extract_files(self, target):
-        cp = run(args=["unzip", "-o", target, "-d", self.fuzz_dir], stdout = DEVNULL)
+        cp = run(args=["unzip", "-o", target, "-d", self.env["fuzz_dir"]], stdout = DEVNULL)
         if cp.returncode != 0:
             logging.error(f"Failed to unzip {target}")
             exit(1)
@@ -77,17 +82,17 @@ class Broker:
     def parse_config(self):
         self.config = ConfigParser(interpolation = ExtendedInterpolation())
         self.config.optionxform=str
-        self.config.read(self.fuzz_dir + "/config.ini")
+        self.config.read(self.env["fuzz_dir"] + "/config.ini")
 
     async def schedule_fuzzers(self):
         self.instances = []
 
-        x = AFLInstance(self.config, self.fuzz_dir, self.id, master = True)
+        x = AFLInstance(self.config, self.env["fuzz_dir"], self.env["id"], master = True)
         await x.start()
         self.instances.append(x)
 
-        for x in range(1, self.cpus):
-            instance = AFLInstance(self.config, self.fuzz_dir, self.id + str(x))
+        for x in range(1, self.env["cpus"]):
+            instance = AFLInstance(self.config, self.env["fuzz_dir"], self.env["id"] + str(x))
             await instance.start()
             self.instances.append(instance)
 
@@ -96,6 +101,7 @@ class Broker:
         [x.kill() for x in self.instances]
 
     async def cancel_tasks(self):
+        self.server.close()
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         logging.info(f"Cancelling {len(tasks)} outstanding tasks")
@@ -106,7 +112,7 @@ class Broker:
         awaitable = [asyncio.create_task(x.wait()) for x in self.instances]
         while True:
             logging.info("watching")
-            done, pending = await asyncio.wait(awaitable, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait(awaitable, return_when=asyncio.FIRST_COMPLETED)
 
             for task in done:
                 logging.info(task)
@@ -121,11 +127,11 @@ class Broker:
                 break
 
     async def sync_corpus(self):
-        out_dir = self.fuzz_dir + "/out/"
-        src = out_dir + "master_{}".format(self.id)
+        out_dir = self.env["fuzz_dir"] + "/out/"
+        src = out_dir + "master_{}".format(self.env["id"])
         dst = "/work/res/"
         await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", "--chown=1000:1000", "--exclude=README.txt", src, dst)).wait()
-        await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", "--exclude=master_{}".format(self.id), dst, out_dir)).wait()
+        await (await asyncio.create_subprocess_exec("rsync", "-rlpogtz", "--exclude=master_{}".format(self.env["id"]), dst, out_dir)).wait()
         logging.info(f"Sync done")
 
     async def watch_fuzzers(self):
@@ -133,10 +139,18 @@ class Broker:
         await self.cancel_tasks()
         self.loop.stop()
 
-    async def watch_corpus(self, time):
+    async def watch_corpus(self, time: int = 5*60):
         while True:
             await asyncio.sleep(time)
             await self.sync_corpus()
+
+    async def handle_grpc(self, host: str = '0.0.0.0', port: int = 50051):
+        await self.server.start(host, port)
+        print(f'Serving on {host}:{port}')
+        await self.server.wait_closed()
+
+    def init_grpc(self):
+        self.server = Server([Processor(self.env, self.config)])
 
     def init_signals(self):
         signals = (signal.SIGTERM, signal.SIGINT)
@@ -149,8 +163,11 @@ class Broker:
         try:
             self.loop.run_until_complete(self.schedule_fuzzers())
             self.init_signals()
-            self.loop.create_task(self.watch_fuzzers())
-            self.loop.create_task(self.watch_corpus(5*60))
+            self.init_grpc()
+            self.loop.create_task(self.watch_fuzzers(), name="watch_fuzzers")
+            self.loop.create_task(self.watch_corpus(), name="watch_corpus")
+            self.loop.create_task(self.handle_grpc(), name="handle_grpc")
+            logging.info(asyncio.all_tasks(self.loop))
             self.loop.run_forever()
         finally:
             self.loop.close()

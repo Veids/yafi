@@ -46,6 +46,7 @@ pub struct Job {
     pub cpus: u64,
     pub ram: u64,
     pub last_msg: String,
+    pub log: String,
     pub status: String,
 }
 
@@ -140,7 +141,7 @@ impl Job {
                     corpus: job_info.corpus.clone(),
                     last_msg: "".to_string(),
                     status: "init".to_string(),
-                    crash_auto_analyze: false,
+                    crash_auto_analyze: job_info.crash_auto_analyze,
                 },
             });
             rest_cpus -= std::cmp::min(rest_cpus, agent.free_cpus.unwrap_or(0) as u64);
@@ -187,7 +188,7 @@ impl Job {
         sqlx::query!(
             r#"
             INSERT INTO job_collection (guid, name, description, creation_date, agent_type, image, cpus, ram, timeout, target, corpus, status, crash_auto_analyze)
-            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0)
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             "#,
             job_info.guid,
             job_info.name,
@@ -200,7 +201,8 @@ impl Job {
             job_info.timeout,
             job_info.target,
             job_info.corpus,
-            "init"
+            "init",
+            job_info.crash_auto_analyze
         )
         .execute(&mut tx)
         .await?;
@@ -272,7 +274,7 @@ impl Job {
 
         let jobs = sqlx::query!(
             "
-            SELECT agent_guid, collection_guid, idx, cpus, ram, last_msg, status
+            SELECT agent_guid, collection_guid, idx, cpus, ram, last_msg, log, status
             FROM jobs
             WHERE collection_guid = $1
             ",
@@ -288,6 +290,7 @@ impl Job {
             cpus: rec.cpus.unwrap() as u64,
             ram: rec.ram.unwrap() as u64,
             last_msg: rec.last_msg,
+            log: rec.log,
             status: rec.status,
         })
         .collect();
@@ -393,6 +396,28 @@ impl Job {
             job_guid,
             agent_guid,
             status
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn set_job_log(
+        agent_guid: &str,
+        job_guid: &str,
+        log: &str,
+        pool: &SqlitePool,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE jobs
+            SET log = $3
+            WHERE collection_guid = $1 AND agent_guid = $2
+            "#,
+            job_guid,
+            agent_guid,
+            log
         )
         .execute(pool)
         .await?;

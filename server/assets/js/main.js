@@ -13,10 +13,32 @@ import 'admin-lte';
 import 'izitoast';
 
 function formatBytes(a,b=2,k=1024){let d=Math.floor(Math.log(a)/Math.log(k));return 0==a?"0 Bytes":parseFloat((a/Math.pow(k,d)).toFixed(Math.max(0,b)))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}
+
+function renderAnalyzeStatus(data, type){
+  if (type === "display"){
+    if (data === null) {
+      return "no"
+    } else {
+      return "yes";
+    }
+  }
+  return data;
+}
+
+function renderDate(data, type) {
+  if (type === "display") {
+    return new Date(data).toLocaleString();
+  }
+  return data;
+}
+
 window.formatBytes = formatBytes;
+window.renderAnalyzeStatus = renderAnalyzeStatus;
+window.renderDate = renderDate;
 
 function setup_modals(){
   $("#modal-add-agent :submit").click(function(event){
+
     var modal = $("#modal-add-agent");
     var description = $(modal).find("#description").first().val();
     var agent_type = $(modal).find("#agent-type").first().val();
@@ -65,6 +87,8 @@ function setup_modals(){
     var timeout = modal.find("#timeout").first().val();
     var target = modal.find("#upload-target")[0].files[0];
     var corpus = modal.find("#upload-corpus")[0].files[0];
+    var crash_auto_analyze = modal.find("#crash-auto-analyze").is(":checked");
+    var trim_corpus = modal.find("#trim-corpus").is(":checked");
 
     if (name.length)
       fd.append("name", name);
@@ -82,8 +106,9 @@ function setup_modals(){
     if (target)
       fd.append("target", target);
     if (corpus)
-    fd.append("corpus", corpus);
-  
+      fd.append("corpus", corpus);
+    fd.append("crash-auto-analyze", crash_auto_analyze);
+
     $.ajax({
       url: "/api/job",
       method: "POST",

@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    error, fs,
     path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
@@ -10,7 +10,9 @@ use crate::config::CONFIG;
 use crate::jobs::Jobs;
 use crate::protos::agent::CrashMsg;
 use bollard::{
-    container::{Config, CreateContainerOptions, LogsOptions, WaitContainerOptions},
+    container::{
+        Config, CreateContainerOptions, InspectContainerOptions, LogsOptions, WaitContainerOptions,
+    },
     errors::Error as BollardError,
     image::CreateImageOptions,
     models::{ContainerWaitResponse, HostConfig},
@@ -24,13 +26,15 @@ use tokio::{
     task, time,
 };
 use tokio_stream::StreamExt;
-use tonic::{Request, Response, Status};
+use tonic::{transport::Channel, Request, Response, Status};
 
 use crate::protos::agent::job_server::Job;
 use crate::protos::agent::{
-    update::UpdateKind, CrashAnalyzeRequest, Empty, JobCreateRequest, JobGuid,
+    update::UpdateKind, AnalyzeRequest, AnalyzeResponse, Empty, JobCreateRequest, JobGuid,
     JobInfoContainerList, JobMsg, JobsList, Update,
 };
+use crate::protos::docker::process_client::ProcessClient;
+use crate::protos::docker::CrashAnalyzeRequest;
 
 #[derive(Debug)]
 pub struct JobHandler {
@@ -56,6 +60,7 @@ struct JobItem {
     updates: Arc<RwLock<Option<Sender<Update>>>>,
     id: Option<String>,
     job_dir: PathBuf,
+    docker_client: Option<ProcessClient<Channel>>,
 }
 
 impl JobItem {
@@ -74,6 +79,7 @@ impl JobItem {
             updates,
             id: None,
             job_dir,
+            docker_client: None,
         }
     }
 
@@ -85,6 +91,25 @@ impl JobItem {
                 })
                 .await;
         }
+    }
+
+    async fn get_logs(&self) -> Result<String, BollardError> {
+        let mut log_stream = self.docker.logs::<String>(
+            self.id.as_ref().unwrap(),
+            Some(LogsOptions {
+                stderr: true,
+                ..Default::default()
+            }),
+        );
+
+        let mut log = String::new();
+
+        while let Some(output) = log_stream.next().await {
+            let output = output?;
+            log += std::str::from_utf8(&output.into_bytes()).unwrap();
+        }
+
+        Ok(log)
     }
 
     async fn pull_image(&self) -> Result<(), BollardError> {
@@ -103,6 +128,7 @@ impl JobItem {
                     guid: self.req.job_guid.clone(),
                     status: None,
                     last_msg: Some(status.to_string()),
+                    log: None,
                 }))
                 .await;
             }
@@ -149,50 +175,72 @@ impl JobItem {
         self.send_update(UpdateKind::JobMsg(JobMsg {
             guid: self.req.job_guid.clone(),
             status: Some("alive".to_string()),
-            last_msg: None,
+            last_msg: Some("Container started".to_string()),
+            log: None,
         }))
         .await;
 
         Ok(res)
     }
 
-    async fn handle_response(&self, response: ContainerWaitResponse) -> Result<(), BollardError> {
-        if response.status_code == 0 {
-            self.send_update(UpdateKind::JobMsg(JobMsg {
-                guid: self.req.job_guid.clone(),
-                status: Some("completed".to_string()),
-                last_msg: None,
-            }))
-            .await;
-            self.jobs.set_status(&self.req.job_guid, "completed");
-        } else {
-            let mut log_stream = self.docker.logs::<String>(
-                self.id.as_ref().unwrap(),
-                Some(LogsOptions {
-                    stderr: true,
-                    ..Default::default()
-                }),
-            );
+    async fn establish_connection(&mut self) -> Result<(), Box<dyn error::Error + Send + Sync>> {
+        let options = Some(InspectContainerOptions { size: false });
+        let response = self
+            .docker
+            .inspect_container(self.id.as_ref().unwrap(), options)
+            .await?;
 
-            let mut log = String::new();
+        let ip = response
+            .network_settings
+            .ok_or("Couldn't get container network settings")?
+            .ip_address
+            .ok_or("Couldn't get container ip address")?;
 
-            while let Some(output) = log_stream.next().await {
-                let output = output?;
-                log += std::str::from_utf8(&output.into_bytes()).unwrap();
-            }
+        info!("http://{ip}:50051");
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        self.docker_client = Some(ProcessClient::connect(format!("http://{ip}:50051")).await?);
 
-            self.send_update(UpdateKind::JobMsg(JobMsg {
-                guid: self.req.job_guid.clone(),
-                status: Some("error".to_string()),
-                last_msg: Some(log),
-            }))
-            .await;
-            self.jobs.set_status(&self.req.job_guid, "error");
-        }
         Ok(())
     }
 
-    async fn sync_crashes(&self) -> Result<(), BollardError> {
+    async fn handle_response(&self, response: ContainerWaitResponse) -> Result<(), BollardError> {
+        let logs = self.get_logs().await?;
+        let status = if response.status_code == 0 {"completed"} else {"error"};
+        self.send_update(UpdateKind::JobMsg(JobMsg{
+            guid: self.req.job_guid.clone(),
+            status: Some(status.to_string()),
+            last_msg: Some("exited".to_string()),
+            log: Some(logs),
+        })).await;
+        self.jobs.set_status(&self.req.job_guid, status);
+        Ok(())
+    }
+
+    async fn analyze_crash(&mut self, file_name: String) -> Option<String> {
+        match &mut self.docker_client {
+            Some(conn) => {
+                let request = tonic::Request::new(CrashAnalyzeRequest {
+                    name: file_name.clone(),
+                });
+                match conn.analyze_crash(request).await {
+                    Ok(res) => Some(res.into_inner().result),
+                    Err(err) => {
+                        info!("Failed to analyze crash {}: {}", file_name, err);
+                        None
+                    }
+                }
+            }
+            None => {
+                info!(
+                    "Failed to analyze crash {}: connection is not ready",
+                    file_name
+                );
+                None
+            }
+        }
+    }
+
+    async fn sync_crashes(&mut self) -> Result<(), BollardError> {
         let res_path = self.job_dir.join("res");
         let crashes_out = self.job_dir.join("crashes");
 
@@ -211,10 +259,17 @@ impl JobItem {
                             info!("New crash! {:?}", target);
                             let file_name = file_name.to_string_lossy().into_owned();
                             fs::copy(crash_path, target.clone())?;
+
+                            let analyzed: Option<String> = if self.req.crash_auto_analyze {
+                                self.analyze_crash(file_name.clone()).await
+                            } else {
+                                None
+                            };
+
                             self.send_update(UpdateKind::CrashMsg(CrashMsg {
                                 job_guid: self.req.job_guid.clone(),
                                 name: file_name,
-                                analyzed: None,
+                                analyzed,
                             }))
                             .await;
                         }
@@ -226,7 +281,7 @@ impl JobItem {
         Ok(())
     }
 
-    async fn wait_container(&self) -> Result<(), BollardError> {
+    async fn wait_container(&mut self) -> Result<(), BollardError> {
         let mut stream = self.docker.wait_container(
             self.id.as_ref().unwrap(),
             Some(WaitContainerOptions {
@@ -274,26 +329,40 @@ impl JobItem {
         Ok(res)
     }
 
-    async fn handle(&mut self) -> Result<(), BollardError> {
+    async fn force_stop(&mut self) -> Result<(), BollardError> {
+        self.docker
+            .stop_container(self.id.as_ref().unwrap(), None)
+            .await?;
+        self.remove_container().await
+    }
+
+    async fn handle(&mut self) -> Result<(), Box<dyn error::Error + Send + Sync>> {
         self.pull_image().await?;
         self.create_container().await?;
         self.start_container().await?;
+        self.establish_connection().await?;
         self.wait_container().await?;
-        self.remove_container().await
+        self.remove_container().await?;
+        Ok(())
     }
 
     pub async fn main(&mut self) {
         match self.handle().await {
             Ok(_) => {}
             Err(err) => {
-                error!("{}", err);
+                error!("{:#?}", err);
+                let logs = self.get_logs().await.ok();
+                let err_msg = err.to_string();
                 self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
                     status: Some("error".to_string()),
-                    last_msg: Some(err.to_string()),
+                    last_msg: Some(err_msg),
+                    log: logs,
                 }))
                 .await;
                 self.jobs.set_status(&self.req.job_guid, "error");
+
+                _ = self.force_stop().await;
             }
         }
     }
@@ -367,8 +436,10 @@ impl Job for JobHandler {
 
     async fn analyze_crash(
         &self,
-        request: Request<CrashAnalyzeRequest>,
-    ) -> Result<Response<Empty>, Status> {
-        Ok(Response::new(Empty {}))
+        request: Request<AnalyzeRequest>,
+    ) -> Result<Response<AnalyzeResponse>, Status> {
+        Ok(Response::new(AnalyzeResponse {
+            result: "".to_string(),
+        }))
     }
 }

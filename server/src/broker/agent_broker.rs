@@ -85,7 +85,7 @@ impl AgentBroker {
                     self.update_status("down").await;
                 }
                 return Err(format!(
-                    "agent.SystemInfoClient {} coudln't establish connection",
+                    "agent.SystemInfoClient {} couldn't establish connection",
                     self.guid
                 ));
             }
@@ -163,6 +163,18 @@ impl AgentBroker {
             Err(err) => {
                 error!(
                     "Failed to set {} job last_msg for {}: {:?}",
+                    job_guid, self.guid, err
+                );
+            }
+        }
+    }
+
+    async fn set_job_log(&self, job_guid: &str, log: &str) {
+        match Job::set_job_log(&self.guid, job_guid, log, &self.db_pool).await {
+            Ok(_) => {}
+            Err(err) => {
+                error!(
+                    "Failed to set {} job log for {}: {:?}",
                     job_guid, self.guid, err
                 );
             }
@@ -265,6 +277,10 @@ impl AgentBroker {
                                                 }
                                             } else if let Some(last_msg) = job_update.last_msg {
                                                 self.set_job_last_msg(&job_update.guid, &last_msg).await;
+                                            }
+
+                                            if let Some(log) = job_update.log {
+                                                self.set_job_log(&job_update.guid, &log).await;
                                             }
                                         },
                                         UpdateKind::CrashMsg(crash_msg) => {

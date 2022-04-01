@@ -16,14 +16,19 @@ function main(){
         "render": $.fn.dataTable.render.text()
       },
       {
+        "data": "creation_date",
+        "render": renderDate
+      },
+      {
         "data": "name",
         "render": $.fn.dataTable.render.text()
       },
       {
         "data": "analyzed",
-        "render": $.fn.dataTable.render.text()
+        "render": renderAnalyzeStatus
       },
     ],
+    "order": [[2, "desc"]]
   });
 
   $(t.table().container()).on("click", "tbody tr", function(){

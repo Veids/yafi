@@ -30,10 +30,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     id          INTEGER PRIMARY KEY NOT NULL,
     agent_guid  TEXT NOT NULL,
     collection_guid TEXT NOT NULL,
-    idx         INTEGER DEFAULT 0,
-    cpus        INTEGER DEFAULT 0,
-    ram         INTEGER DEFAULT 0,
+    idx         INTEGER NOT NULL DEFAULT 0,
+    cpus        INTEGER NOT NULL DEFAULT 0,
+    ram         INTEGER NOT NULL DEFAULT 0,
     last_msg    TEXT NOT NULL,
+    log         TEXT NOT NULL DEFAULT "",
     status      TEXT NOT NULL,
     freed       BOOLEAN NOT NULL CHECK (freed IN (0, 1))
 );

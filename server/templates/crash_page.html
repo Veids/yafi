@@ -49,10 +49,10 @@
                   <a class="nav-link active" href="#hexdump" data-toggle="tab" role="tab" aria-controls="hexdump">Hexdump</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="#coverage" data-toggle="tab" role="tab" aria-controls="coverage">WIP</a>
+                  <a class="nav-link disabled" href="#clusterfuzz" data-toggle="tab" role="tab" aria-controls="clusterfuzz">ClusterFuzz</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="#crashes" data-toggle="tab" role="tab" aria-controls="crashes">WIP</a>
+                  <a class="nav-link disabled" href="#crashes" data-toggle="tab" role="tab" aria-controls="crashes" aria-disabled="true">WIP</a>
                 </li>
               </ul>
             </div>
@@ -64,8 +64,59 @@
                   <pre id="hexdump-data">
                   </pre>
                 </div>
-                <div class="tab-pane fade" id="coverage" role="tabpanel" aria-labelledby="tab-coverage">
-                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+                <div class="tab-pane fade" id="clusterfuzz" role="tabpanel" aria-labelledby="tab-clusterfuzz">
+                  <div id="clusterfuzz-info">
+                    <div class="row">
+                      <div class="col-12 col-sm-3">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Type</span>
+                            <span id="type" class="info-box-number text-center text-muted mb-0">unknown</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                      <div class="col-12 col-sm-3">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Is crash</span>
+                            <span id="is-crash" class="info-box-number text-center text-muted mb-0">unknown</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                      <div class="col-12 col-sm-3">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Is security issue</span>
+                            <span id="is-security-issue" class="info-box-number text-center text-muted mb-0">unknown</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                      <div class="col-12 col-sm-3">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Should ignore</span>
+                            <span id="should-ignore" class="info-box-number text-center text-muted mb-0">unknown</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                    </div>
+                    <div class="row">
+                      <div class="col-12">
+                        <div>
+                          <h4>Output</h4>
+                          <pre id="output"></pre>
+                        </div>
+                        <div>
+                          <h4>Stacktrace</h4>
+                          <pre id="stacktrace"></pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="tab-pane fade" id="crashes" role="tabpanel" aria-labelledby="tab-crashes">
                   Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.

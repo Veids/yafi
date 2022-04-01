@@ -45,11 +45,12 @@ impl Crash {
         sqlx::query!(
             r#"
             INSERT INTO crashes (guid, name, collection_guid, analyzed, hash, creation_date, size)
-            VALUES($1, $2, $3, NULL, $4, $5, $6)
+            VALUES($1, $2, $3, $4, $5, $6, $7)
             "#,
             guid,
             crash.name,
             crash.job_guid,
+            crash.analyzed,
             hash_str,
             now,
             size

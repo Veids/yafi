@@ -196,7 +196,6 @@ impl JobItem {
             .ip_address
             .ok_or("Couldn't get container ip address")?;
 
-        info!("http://{ip}:50051");
         tokio::time::sleep(Duration::from_secs(5)).await;
         self.docker_client = Some(ProcessClient::connect(format!("http://{ip}:50051")).await?);
 
@@ -205,13 +204,18 @@ impl JobItem {
 
     async fn handle_response(&self, response: ContainerWaitResponse) -> Result<(), BollardError> {
         let logs = self.get_logs().await?;
-        let status = if response.status_code == 0 {"completed"} else {"error"};
-        self.send_update(UpdateKind::JobMsg(JobMsg{
+        let status = if response.status_code == 0 {
+            "completed"
+        } else {
+            "error"
+        };
+        self.send_update(UpdateKind::JobMsg(JobMsg {
             guid: self.req.job_guid.clone(),
             status: Some(status.to_string()),
             last_msg: Some("exited".to_string()),
             log: Some(logs),
-        })).await;
+        }))
+        .await;
         self.jobs.set_status(&self.req.job_guid, status);
         Ok(())
     }
@@ -256,7 +260,6 @@ impl JobItem {
                         let file_name = crash_path.file_name().unwrap_or_default();
                         let target = crashes_out.join(file_name);
                         if !target.exists() {
-                            info!("New crash! {:?}", target);
                             let file_name = file_name.to_string_lossy().into_owned();
                             fs::copy(crash_path, target.clone())?;
 

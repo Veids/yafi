@@ -3,20 +3,6 @@ window.Buffer = Buffer.Buffer;
 
 import { hexdump } from '@gct256/hexdump';
 
-function build_clusterfuzz_info(data){
-  return `
-    <p>Type: ${data.type}</p>
-    <p>Is crash: ${data.is_crash}</p>
-    <p>Is security issue: ${data.is_security_issue}</p>
-    <p>Should ignore: ${data.should_ignore}</p>
-    <p>Output:</p>
-    <pre>${data.output}</pre>
-    <p>Return code: ${data.return_code}</p>
-    <p>Stacktrace:</p>
-    <pre>${data.stacktrace}</pre>
-  `;
-}
-
 function handle_clusterfuzz(data){
   var info = $("#clusterfuzz-info");
   info.find("#type").text(data.type || "unknown");
@@ -27,6 +13,21 @@ function handle_clusterfuzz(data){
   info.find("#stacktrace").text(data.stacktrace);
 
   var nav = $('a[aria-controls="clusterfuzz"]');
+  nav.removeClass("disabled");
+}
+
+function handle_gdb(data){
+  var info = $("#gdb-info");
+  info.find("#short-description").text(data.exploitable["Short description"]);
+  info.find("#exp-classification").text(data.exploitable["Exploitability Classification"]);
+  info.find("#other-tags").text(data.exploitable["Other tags"]);
+  
+  info.find("#description").text(data.exploitable.Description);
+  info.find("#explanation").text(data.exploitable.Explanation);
+  info.find("#hash").text(data.exploitable.Hash);
+  info.find("#backtrace").text(data.backtrace);
+
+  var nav = $('a[aria-controls="gdb"]');
   nav.removeClass("disabled");
 }
 
@@ -46,11 +47,13 @@ async function init_crash_info(guid){
 
     $("#crash-hash").text(`sha256 - ${crash.hash}`);
 
-    if (crash.analyzed !== null) {
-      console.log(crash);
+    if (crash.analyzed != null) {
       var analyzed = JSON.parse(crash.analyzed);
       if (analyzed.clusterfuzz !== null) {
         handle_clusterfuzz(analyzed.clusterfuzz);
+      }
+      if (analyzed.gdb != null) {
+        handle_gdb(analyzed.gdb);
       }
     }
   } catch (err) {

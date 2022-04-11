@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import logging
 
 from pathlib import Path
 from grpclib.utils import graceful_exit
@@ -14,41 +15,141 @@ from docker_grpc import ProcessBase
 
 from clusterfuzz._internal.crash_analysis.crash_result import CrashResult
 
+class LaunchConfig:
+    def __init__(self, env, config):
+        self._env = env
+        self._config = config
+
+        self.test_path: Path = self.get_test_path()
+        self.crashes_path: Path = self.get_crashes_path()
+        self.env = self.get_binary_env()
+        self.fuzz_dir = self._env["fuzz_dir"]
+
+    def get_test_path(self) -> Path:
+        test_bin = self._config.has_section("LAUNCH") and self._config["LAUNCH"].get("SAP_TEST_BIN") or "target"
+        test_path = Path(self._env["fuzz_dir"]).joinpath(test_bin)
+        if not test_path.exists():
+            raise Exception("Target binary {} is not found".format(self.test_path))
+        return test_path
+
+    def get_crashes_path(self) -> Path:
+        return Path("/work/crashes")
+
+    def get_binary_env(self):
+        return dict(self._config["ENV"].items())
+
+class ClusterFuzzAnalyzer:
+    def __init__(self, launchConfig):
+        self.launchConfig = launchConfig
+
+    async def analyze(self, crash_path: Path):
+        cmd = str(self.launchConfig.test_path)
+        data = crash_path.read_bytes()
+
+        env = self.launchConfig.env
+        cwd = self.launchConfig.fuzz_dir
+
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdin = asyncio.subprocess.PIPE,
+            stdout = asyncio.subprocess.PIPE,
+            stderr = asyncio.subprocess.STDOUT,
+            env = env,
+            shell = True,
+            cwd = cwd
+        )
+
+        stdout, _ = await proc.communicate(data)
+
+        cr = CrashResult(proc.returncode, 0, stdout)
+        return {
+            'type': cr.get_type(),
+            'is_crash': cr.is_crash(),
+            'is_security_issue': cr.is_security_issue(),
+            'should_ignore': cr.should_ignore(),
+            'stacktrace': cr.get_stacktrace(),
+            'output': cr.output,
+            'return_code': cr.return_code
+        }
+
+class GdbAnalyzer:
+    def __init__(self, launchConfig):
+        self.launchConfig = launchConfig
+
+    def parse_stdout(self, stdout):
+        exp_marker = b"EXPLOITABLE\n"
+        bt_marker = b"BACKTRACE\n"
+
+        exp_start = stdout.index(exp_marker)
+        bt_start = stdout.index(bt_marker)
+
+        exp_string = stdout[exp_start + len(exp_marker):bt_start].strip()
+        bt_string = stdout[bt_start + len(bt_marker):].strip()
+
+        exp = exp_string.decode().split("\n")
+        bt = bt_string.decode()
+
+        exp = {y[0]: y[1] for y in [x.split(": ") for x in exp]}
+
+        return {
+            "backtrace": bt,
+            "exploitable": exp,
+        }
+
+    async def analyze(self, crash_path: Path):
+        cmd = self.gen_gdb_cmd(crash_path)
+        cwd = self.launchConfig.fuzz_dir
+
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout = asyncio.subprocess.PIPE,
+            stderr = asyncio.subprocess.STDOUT,
+            shell = True,
+            cwd = cwd
+        )
+
+        stdout, _ = await proc.communicate()
+        return self.parse_stdout(stdout)
+
+    def gen_gdb_cmd(self, crash_path: Path):
+        args = [
+            "gdb",
+            "-q --batch",
+            "-ex 'source /opt/exploitable/exploitable/exploitable.py'",
+            " ".join(["-ex 'set environment {} {}'".format(k, v) for k, v in self.launchConfig.env.items()]),
+            "-ex 'r -path /work/data < {}'".format(crash_path),
+            "-ex 'echo EXPLOITABLE\\n'",
+            "-ex 'exploitable'",
+            "-ex 'echo BACKTRACE\\n'",
+            "-ex 'bt'",
+            str(self.launchConfig.test_path)
+        ]
+        return " ".join(args)
+
 class Processor(ProcessBase):
     def __init__(self, env, config):
         self.env = env
         self.config = config
+        self.launchConfig = LaunchConfig(env, config)
+        self.clusterFuzz = ClusterFuzzAnalyzer(self.launchConfig)
+        self.gdb = GdbAnalyzer(self.launchConfig)
 
     async def AnalyzeCrash(self, stream: Stream[CrashAnalyzeRequest, CrashAnalyzeResponse]) -> None:
         request = await stream.recv_message()
         assert request is not None
 
-        test_bin = self.config.has_section("LAUNCH") and self.config["LAUNCH"].get("SAP_TEST_BIN") or "target"
-        binary_path = Path("{}/{}".format(self.env["fuzz_dir"], test_bin))
-        if not binary_path.exists():
-            raise GRPCError(Status.INVALID_ARGUMENT, "Target binary {} is not found".format(binary_path))
-
-        crash_path = Path("/work/crashes").joinpath(request.name)
+        crash_path = self.launchConfig.crashes_path.joinpath(request.name)
         if not crash_path.exists():
-            raise GRPCError(Status.INVALID_ARGUMENT, "Requested crash {} is not found".format(crash_path))
+            raise GRPCError(Status.INVALID_ARGUMENT, f"Requested crash {crash_path} is not found")
 
-        data = crash_path.read_bytes()
-        cmd = "{}".format(binary_path)
-
-        proc = await asyncio.create_subprocess_shell(cmd, stdin = asyncio.subprocess.PIPE, stdout = asyncio.subprocess.PIPE, stderr = asyncio.subprocess.STDOUT, env = dict(self.config["ENV"].items()), shell = True, cwd = self.env["fuzz_dir"])
-        stdout, _ = await proc.communicate(data)
-
-        cr = CrashResult(proc.returncode, 0, stdout)
-        result = {
-            'clusterfuzz': {
-                'type': cr.get_type(),
-                'is_crash': cr.is_crash(),
-                'is_security_issue': cr.is_security_issue(),
-                'should_ignore': cr.should_ignore(),
-                'stacktrace': cr.get_stacktrace(),
-                'output': cr.output,
-                'return_code': cr.return_code
+        result = None
+        try:
+            result = {
+                "clusterfuzz": await self.clusterFuzz.analyze(crash_path),
+                "gdb": await self.gdb.analyze(crash_path),
             }
-        }
+        except Exception as err:
+            logging.error(f"{err=}")
+            raise GRPCError(Status.INVALID_ARGUMENT, f"Failed to analyze crash {crash_path}") from err
 
         await stream.send_message(CrashAnalyzeResponse(result=json.dumps(result)))

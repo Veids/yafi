@@ -49,10 +49,10 @@
                   <a class="nav-link active" href="#hexdump" data-toggle="tab" role="tab" aria-controls="hexdump">Hexdump</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link disabled" href="#clusterfuzz" data-toggle="tab" role="tab" aria-controls="clusterfuzz">ClusterFuzz</a>
+                  <a class="nav-link disabled" href="#gdb" data-toggle="tab" role="tab" aria-controls="gdb" aria-disabled="true">GDB</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link disabled" href="#crashes" data-toggle="tab" role="tab" aria-controls="crashes" aria-disabled="true">WIP</a>
+                  <a class="nav-link disabled" href="#clusterfuzz" data-toggle="tab" role="tab" aria-controls="clusterfuzz">ClusterFuzz</a>
                 </li>
               </ul>
             </div>
@@ -63,6 +63,60 @@
                   </pre>
                   <pre id="hexdump-data">
                   </pre>
+                </div>
+                <div class="tab-pane fade" id="gdb" role="tabpanel" aria-labelledby="tab-gdb">
+                  <div id="gdb-info">
+                    <div class="row">
+                      <div class="col-12 col-sm-4">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Short description</span>
+                            <span id="short-description" class="info-box-number text-center text-muted mb-0">null</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                      <div class="col-12 col-sm-4">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Exploitability Classification</span>
+                            <span id="exp-classification" class="info-box-number text-center text-muted mb-0">null</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                      <div class="col-12 col-sm-4">
+                        <div class="info-box bg-light">
+                          <div class="info-box-content">
+                            <span class="info-box-text text-center text-muted">Other tags</span>
+                            <span id="other-tags" class="info-box-number text-center text-muted mb-0">null</span>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- /.col -->
+                    </div>
+                    <!-- /.row -->
+                    <div class="row">
+                      <div class="col-12">
+                        <div>
+                          <h4>Description</h4>
+                          <p id="description" class="text-muted mx-2">null</p>
+                        </div>
+                        <div>
+                          <h4>Explanation</h4>
+                          <p id="explanation" class="text-muted mx-2">null</p>
+                        </div>
+                        <div>
+                          <h4>Hash</h4>
+                          <p id="hash" class="text-muted mx-2">null</p>
+                        </div>
+                        <div>
+                          <h4>Backtrace</h4>
+                          <pre id="backtrace">null</pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="tab-pane fade" id="clusterfuzz" role="tabpanel" aria-labelledby="tab-clusterfuzz">
                   <div id="clusterfuzz-info">
@@ -117,9 +171,6 @@
                       </div>
                     </div>
                   </div>
-                </div>
-                <div class="tab-pane fade" id="crashes" role="tabpanel" aria-labelledby="tab-crashes">
-                  Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
                 </div>
               </div>
             </div>

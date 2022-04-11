@@ -115,7 +115,6 @@ class Broker:
             done, _ = await asyncio.wait(awaitable, return_when=asyncio.FIRST_COMPLETED)
 
             for task in done:
-                logging.info(task)
                 awaitable.remove(task)
 
             if len(awaitable) == 0:
@@ -167,7 +166,6 @@ class Broker:
             self.loop.create_task(self.watch_fuzzers(), name="watch_fuzzers")
             self.loop.create_task(self.watch_corpus(), name="watch_corpus")
             self.loop.create_task(self.handle_grpc(), name="handle_grpc")
-            logging.info(asyncio.all_tasks(self.loop))
             self.loop.run_forever()
         finally:
             self.loop.close()

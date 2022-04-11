@@ -11,8 +11,8 @@ actix-http = "3.0"
 actix-files = "0.6"
 actix-multipart = "0.4"
 sqlx = { version = "0.5", features = [ "runtime-actix-rustls", "sqlite" ] }
-tonic = "0.6"
-prost = "0.9"
+tonic = "0.7"
+prost = "0.10"
 tokio = { version = "1.17", features = ["macros", "rt-multi-thread"] }
 dashmap = "5.2"
 futures = "0.3"
@@ -28,10 +28,7 @@ log = "0.4"
 env_logger = "0.9"
 envy = "0.4"
 sha3 = "0.10"
-
-[dependencies.tera]
-version = "1"
-default-features = false
+tera = { version = "1", default-features = false }
 
 [build-dependencies]
-tonic-build = "0.6"
+tonic-build = "0.7"

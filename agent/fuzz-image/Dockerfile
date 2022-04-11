@@ -14,7 +14,9 @@ RUN pip3 install clusterfuzz grpclib protobuf
 
 RUN apt-get install -qyy python2 python-setuptools && \
     cd /opt && \
-    git clone https://github.com/jfoote/exploitable.git
+    git clone https://github.com/jfoote/exploitable.git && \
+    cd exploitable && \
+    python2 setup.py install
 
 COPY scripts /scripts
 RUN chmod +x /scripts/*

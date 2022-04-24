@@ -8,3 +8,4 @@ dist
 *_grpc.py
 env
 __pycache__
+yarn-error.log

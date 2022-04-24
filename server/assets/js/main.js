@@ -32,9 +32,25 @@ function renderDate(data, type) {
   return data;
 }
 
+function parsePromData(data, metric) {
+  let pallet = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666'];
+  return {
+    datasets: data.map((series, idx) => {
+      return {
+        label: series.metric[metric],
+        data: series.values,
+        backgroundColor: "transparent",
+        borderColor: pallet[idx % pallet.length],
+        pointRadius: 1
+      };
+    })
+  };
+}
+
 window.formatBytes = formatBytes;
 window.renderAnalyzeStatus = renderAnalyzeStatus;
 window.renderDate = renderDate;
+window.parsePromData = parsePromData;
 
 function setup_modals(){
   $("#modal-add-agent :submit").click(function(event){

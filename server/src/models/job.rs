@@ -481,35 +481,6 @@ impl Job {
         tx.commit().await.unwrap();
 
         Self::propagate_status(job_guid, pool).await?;
-
-        ////Propagate status
-        //let rec = sqlx::query!(
-        //    r#"
-        //    SELECT id FROM jobs
-        //    WHERE collection_guid = $1 AND freed != 1
-        //    LIMIT 1
-        //    "#,
-        //    job_guid
-        //)
-        //.fetch_one(&mut tx)
-        //.await;
-
-        ////Status from error cannot be changed to anything
-        //if rec.is_err() {
-        //    sqlx::query!(
-        //        r#"
-        //        UPDATE job_collection
-        //        SET status = $2
-        //        WHERE guid = $1 AND status != 'error'
-        //        "#,
-        //        job_guid,
-        //        status
-        //    )
-        //    .execute(&mut tx)
-        //    .await?;
-        //}
-
-        //tx.commit().await.unwrap();
         Ok(())
     }
 
@@ -587,4 +558,18 @@ impl Job {
 
         Ok(())
     }
+
+    // pub async fn job_exists(guid: &str, pool: &SqlitePool) -> Result<()> {
+    //     let rec = sqlx::query!(
+    //         r#"
+    //         SELECT guid
+    //         FROM job_collection
+    //         WHERE guid = $1
+    //         "#,
+    //         guid
+    //     )
+    //     .fetch_one(pool)
+    //     .await?;
+    //     Ok(())
+    // }
 }

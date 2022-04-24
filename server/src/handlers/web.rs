@@ -1,3 +1,5 @@
+use crate::config::CONFIG;
+
 use actix_web::{get, HttpResponse};
 use lazy_static::lazy_static;
 use log::error;
@@ -19,7 +21,9 @@ lazy_static! {
 
 #[get("/")]
 async fn index() -> HttpResponse {
-    match TEMPLATES.render("index.html", &tera::Context::new()) {
+    let mut ctx = tera::Context::new();
+    ctx.insert("show_stats", &CONFIG.prometheus_url.is_some());
+    match TEMPLATES.render("index.html", &ctx) {
         Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
@@ -43,7 +47,9 @@ async fn jobs() -> HttpResponse {
 
 #[get("/job/{guid}")]
 async fn job() -> HttpResponse {
-    match TEMPLATES.render("job_page.html", &tera::Context::new()) {
+    let mut ctx = tera::Context::new();
+    ctx.insert("show_stats", &CONFIG.prometheus_url.is_some());
+    match TEMPLATES.render("job_page.html", &ctx) {
         Ok(t) => HttpResponse::Ok().content_type("text/html").body(t),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }

@@ -1,5 +1,7 @@
 import 'datatables.net-bs4';
 import 'datatables.net-responsive-bs4';
+import Chart from 'chart.js/auto';
+import 'chartjs-adapter-date-fns';
 
 function build_pil(job){
   return `<a class="nav-link ${job.idx == 0 ? 'active': ''}" data-toggle="pill" href="#assigned-agent-${job.idx}" role="tab" aria-controls="assigned-agent-${job.idx}" aria-selected="true">${job.idx}</a>`;
@@ -146,10 +148,100 @@ async function init_job_info(guid){
   }
 }
 
+async function fetch_stats(data, guid){
+  let response = await fetch(
+    `/api/stats/${guid}`,
+    {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }
+  );
+  return response.json();
+}
+
+function build_chart(ctx, datasets) {
+  var myChart = new Chart(ctx, {
+    type: 'line',
+    data: datasets,
+    options: {
+      scales: {
+        x: {
+          type: 'time',
+          ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10
+          }
+        }
+      },
+    }
+  });
+}
+
+async function init_execs_graph(guid){
+  try {
+    let res = await fetch_stats({query: 'execs_per_sec'}, guid);
+    let data = res.data.result;
+    let datasets = parsePromData(data, "guid");
+
+    let ctx = $("#execs-graph");
+    build_chart(ctx, datasets);
+  } catch(err) {
+    return;
+  }
+}
+
+async function init_crashes_graph(guid){
+  try {
+    let res = await fetch_stats({query: 'saved_crashes'}, guid);
+    let data = res.data.result;
+    let datasets = parsePromData(data, "guid");
+
+    let ctx = $("#crashes-graph");
+    build_chart(ctx, datasets);
+  } catch(err) {
+    return;
+  }
+}
+
+async function init_edges_graph(guid){
+  try {
+    let res = await fetch_stats({query: 'edges_found'}, guid);
+    let data = res.data.result;
+    let datasets = parsePromData(data, "guid");
+
+    let ctx = $("#edges-graph");
+    build_chart(ctx, datasets);
+  } catch(err) {
+    return;
+  }
+}
+
+async function init_cycle_graph(guid){
+  try {
+    let res = await fetch_stats({query: 'cycle_done'}, guid);
+    let data = res.data.result;
+    let datasets = parsePromData(data, "guid");
+
+    let ctx = $("#cycle-graph");
+    build_chart(ctx, datasets);
+  } catch(err) {
+    return;
+  }
+}
+
 async function main(){
   var guid = window.location.pathname.split("/").pop();
   init_crash_table(guid);
-  await init_job_info(guid);
+  await Promise.all([
+    init_job_info(guid),
+    init_execs_graph(guid),
+    init_crashes_graph(guid),
+    init_edges_graph(guid),
+    init_cycle_graph(guid)
+  ]);
 }
 
 (async() => {

@@ -8,6 +8,7 @@ pub struct Config {
     pub database_url: String,
     pub nfs_dir: String,
     pub tmp_dir: String,
+    pub prometheus_url: Option<String>,
 }
 
 fn init_config() -> Config {

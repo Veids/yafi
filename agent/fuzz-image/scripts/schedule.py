@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Passed environment variables:
+# - guid: Job Collection Guid
 # - ID: id to prepend to fuzzer names
 # - RAM
 # - CPUS
@@ -25,12 +26,13 @@ logging.getLogger().setLevel(logging.INFO)
 
 class AFLInstance():
     count = 0
-    def __init__(self, config, fuzz_dir, id = "0", master = False):
+    def __init__(self, config, fuzz_dir, guid, id = "0", master = False):
         self.master = master
         self.env = dict(config["ENV"].items())
         self.fuzz_dir = fuzz_dir
-        self.cmd = "afl-fuzz -i in -o out -Q {} -- {}/target".format(
-            "-M master_{}".format(id) if self.master else "-S slave_{}".format(id),
+        self.cmd = "afl-fuzz -i in -o out -Q {} {} -- {}/target".format(
+            f"-M master_{id}" if self.master else f"-S slave_{id}",
+            f"-T {id},guid:{guid}", # Tag injection vuln? lol
             fuzz_dir
         )
 
@@ -55,11 +57,16 @@ class Broker:
 
     def parse_env(self):
         self.env = {
+            "guid": os.environ.get("GUID"),
             "id": os.environ.get("ID"),
             "cpus": int(os.environ.get("CPUS")),
             "ram": os.environ.get("RAM"),
             "fuzz_dir": os.environ.get("FUZZ_DIR"),
         }
+
+        if self.env["guid"] is None:
+            logging.error("No GUID specified")
+            exit(1)
 
         if self.env["id"] is None:
             logging.error("No ID specified")
@@ -87,12 +94,12 @@ class Broker:
     async def schedule_fuzzers(self):
         self.instances = []
 
-        x = AFLInstance(self.config, self.env["fuzz_dir"], self.env["id"], master = True)
+        x = AFLInstance(self.config, self.env["fuzz_dir"], self.env["guid"], self.env["id"], master = True)
         await x.start()
         self.instances.append(x)
 
         for x in range(1, self.env["cpus"]):
-            instance = AFLInstance(self.config, self.env["fuzz_dir"], self.env["id"] + str(x))
+            instance = AFLInstance(self.config, self.env["fuzz_dir"], self.env["guid"], self.env["id"] + str(x))
             await instance.start()
             self.instances.append(instance)
 

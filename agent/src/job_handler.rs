@@ -93,7 +93,10 @@ impl JobItem {
         }
     }
 
-    async fn get_logs(&self) -> Result<String, BollardError> {
+    async fn get_logs(&self) -> Result<Option<String>, BollardError> {
+        if self.id.is_none() {
+            return Ok(None);
+        }
         let mut log_stream = self.docker.logs::<String>(
             self.id.as_ref().unwrap(),
             Some(LogsOptions {
@@ -109,7 +112,7 @@ impl JobItem {
             log += std::str::from_utf8(&output.into_bytes()).unwrap();
         }
 
-        Ok(log)
+        Ok(Some(log))
     }
 
     async fn pull_image(&self) -> Result<(), BollardError> {
@@ -149,6 +152,7 @@ impl JobItem {
                 ..Default::default()
             }),
             env: Some(vec![
+                format!("GUID={}", self.req.job_guid),
                 format!("ID={}", self.req.idx),
                 format!("CPUS={}", self.req.cpus),
                 "FUZZ_DIR=/root/fuzz".to_string(),
@@ -213,7 +217,7 @@ impl JobItem {
             guid: self.req.job_guid.clone(),
             status: Some(status.to_string()),
             last_msg: Some("exited".to_string()),
-            log: Some(logs),
+            log: logs,
         }))
         .await;
         self.jobs.set_status(&self.req.job_guid, status);
@@ -354,7 +358,7 @@ impl JobItem {
             Ok(_) => {}
             Err(err) => {
                 error!("{:#?}", err);
-                let logs = self.get_logs().await.ok();
+                let logs = self.get_logs().await.ok().unwrap_or(None);
                 let err_msg = err.to_string();
                 self.send_update(UpdateKind::JobMsg(JobMsg {
                     guid: self.req.job_guid.clone(),
@@ -439,7 +443,7 @@ impl Job for JobHandler {
 
     async fn analyze_crash(
         &self,
-        request: Request<AnalyzeRequest>,
+        _request: Request<AnalyzeRequest>,
     ) -> Result<Response<AnalyzeResponse>, Status> {
         Ok(Response::new(AnalyzeResponse {
             result: "".to_string(),

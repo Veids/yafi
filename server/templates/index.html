@@ -137,6 +137,71 @@
           <!-- ./small card -->
         </div>
       </div>
+      
+      {% if show_stats == true %}
+      <!-- row stats -->
+      <div class="row">
+        <div class="col-6">
+          <div class="card">
+            <div class="card-header border-0">
+              <div class="d-flex">
+                <h3 class="card-title">Saved crashes</h3>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="position-relative mb-4">
+                <canvas id="crashes-graph"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6">
+          <div class="card">
+            <div class="card-header border-0">
+              <div class="d-flex">
+                <h3 class="card-title">Edges found</h3>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="position-relative mb-4">
+                <canvas id="edges-graph"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6">
+          <div class="card">
+            <div class="card-header border-0">
+              <div class="d-flex">
+                <h3 class="card-title">Execs/s</h3>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="position-relative mb-4">
+                <canvas id="execs-graph"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6">
+          <div class="card">
+            <div class="card-header border-0">
+              <div class="d-flex">
+                <h3 class="card-title">Hangs saved</h3>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="position-relative mb-4">
+                <canvas id="hangs-graph"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
     </div>
     {% include "modals.html" %}
   </section>

@@ -7,7 +7,7 @@ RUN ln -s $(which afl-showmap) /AFLplusplus && \
     sed -i 's#test -d qemuafl/.git || { echo#test ! -d qemuafl/.git || { echo#' ./build_qemu_support.sh && \
     ./build_qemu_support.sh
 
-RUN ln -s /AFLplusplus/afl-qemu-trace /usr/local/bin/
+#RUN ln -s /AFLplusplus/afl-qemu-trace /usr/local/bin/
 
 RUN apt-get update && apt-get install -qyy python3-pip unzip rsync strace
 RUN pip3 install clusterfuzz grpclib protobuf

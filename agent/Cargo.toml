@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tonic = "0.7"
 prost = "0.10"
-tokio = { version = "1.17", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.18", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1"
 bollard = "0.12"
 dashmap = "5.2"
